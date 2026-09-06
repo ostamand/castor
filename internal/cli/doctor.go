@@ -3,7 +3,6 @@ package cli
 import (
 	"context"
 	"fmt"
-	"os"
 	"os/exec"
 
 	"filippo.io/age"
@@ -12,7 +11,6 @@ import (
 	"github.com/ostamand/castor/internal/sysinfo"
 	"github.com/ostamand/castor/internal/tui"
 	"github.com/spf13/cobra"
-	"google.golang.org/api/option"
 )
 
 var doctorCmd = &cobra.Command{
@@ -79,20 +77,7 @@ func runDoctor(cmd *cobra.Command, args []string) error {
 	// 5. Check Cloud Destinations
 	if cfg != nil {
 		for _, dest := range cfg.Destinations {
-			var prov storage.Provider
-			var provErr error
-
-			switch dest.Provider {
-			case "gcs":
-				prov, provErr = storage.NewGCSProvider(ctx, dest.Name, dest.Bucket, dest.Prefix)
-			case "gdrive":
-				credsPath := config.DefaultCredentialsPath()
-				var opts []option.ClientOption
-				if _, err := os.Stat(credsPath); err == nil {
-					opts = append(opts, option.WithCredentialsFile(credsPath))
-				}
-				prov, provErr = storage.NewGDriveProvider(ctx, dest.Name, dest.Folder, opts...)
-			}
+			prov, provErr := storage.NewProviderFromConfig(ctx, dest)
 
 			if provErr != nil {
 				rows = append(rows, []string{fmt.Sprintf("Provider: %s", dest.Name), provErr.Error(), tui.BadgeStatus("FAIL")})

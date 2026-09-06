@@ -3,14 +3,12 @@ package cli
 import (
 	"context"
 	"fmt"
-	"os"
 	"strings"
 
 	"github.com/ostamand/castor/internal/config"
 	"github.com/ostamand/castor/internal/storage"
 	"github.com/ostamand/castor/internal/tui"
 	"github.com/spf13/cobra"
-	"google.golang.org/api/option"
 )
 
 var (
@@ -66,18 +64,7 @@ func runLs(cmd *cobra.Command, args []string) error {
 		}
 	}
 
-	var prov storage.Provider
-	switch dest.Provider {
-	case "gcs":
-		prov, err = storage.NewGCSProvider(ctx, dest.Name, dest.Bucket, dest.Prefix)
-	case "gdrive":
-		credsPath := config.DefaultCredentialsPath()
-		var opts []option.ClientOption
-		if _, err := os.Stat(credsPath); err == nil {
-			opts = append(opts, option.WithCredentialsFile(credsPath))
-		}
-		prov, err = storage.NewGDriveProvider(ctx, dest.Name, dest.Folder, opts...)
-	}
+	prov, err := storage.NewProviderFromConfig(ctx, dest)
 	if err != nil {
 		return fmt.Errorf("failed to connect to '%s': %w", dest.Name, err)
 	}

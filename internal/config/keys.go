@@ -74,3 +74,20 @@ func MetadataFileName(targetName string, encrypted bool) string {
 	}
 	return base
 }
+
+// ResolveCanonicalKey maps a target identifier (name, path, or key) to its canonical cloud key
+func ResolveCanonicalKey(identifier string, namespace string, targets []TargetConfig) string {
+	cleanID := strings.TrimSpace(identifier)
+	for _, t := range targets {
+		if t.Name == cleanID || filepath.Clean(sysinfo.ExpandHome(t.Path)) == filepath.Clean(sysinfo.ExpandHome(cleanID)) {
+			return CanonicalCloudKey(namespace, t.Path, t.Namespace)
+		}
+	}
+	if strings.HasPrefix(cleanID, namespace+"/user/") || strings.HasPrefix(cleanID, namespace+"/system/") {
+		return cleanID
+	}
+	if !strings.HasPrefix(cleanID, namespace+"/") {
+		return filepath.ToSlash(filepath.Join(namespace, cleanID))
+	}
+	return cleanID
+}

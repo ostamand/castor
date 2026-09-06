@@ -20,7 +20,6 @@ import (
 	"github.com/ostamand/castor/internal/tui"
 	"github.com/spf13/cobra"
 	"golang.org/x/term"
-	"google.golang.org/api/option"
 )
 
 var (
@@ -75,18 +74,7 @@ func runVerify(cmd *cobra.Command, args []string) error {
 		}
 	}
 
-	var prov storage.Provider
-	switch dest.Provider {
-	case "gcs":
-		prov, err = storage.NewGCSProvider(ctx, dest.Name, dest.Bucket, dest.Prefix)
-	case "gdrive":
-		credsPath := config.DefaultCredentialsPath()
-		var opts []option.ClientOption
-		if _, err := os.Stat(credsPath); err == nil {
-			opts = append(opts, option.WithCredentialsFile(credsPath))
-		}
-		prov, err = storage.NewGDriveProvider(ctx, dest.Name, dest.Folder, opts...)
-	}
+	prov, err := storage.NewProviderFromConfig(ctx, dest)
 	if err != nil {
 		return fmt.Errorf("failed to connect to provider '%s': %w", dest.Name, err)
 	}
@@ -126,10 +114,8 @@ func runVerify(cmd *cobra.Command, args []string) error {
 	fmt.Printf("🦫 Castor · Verifying %d archive(s) in '%s' (Namespace: %s)...\n\n",
 		len(targetsToVerify), dest.Name, targetNamespace)
 
-	for _, targetKey := range targetsToVerify {
-		if !strings.HasPrefix(targetKey, targetNamespace+"/") {
-			targetKey = path.Join(targetNamespace, targetKey)
-		}
+	for _, rawTarget := range targetsToVerify {
+		targetKey := config.ResolveCanonicalKey(rawTarget, targetNamespace, cfg.Targets)
 
 		dirScope := path.Dir(targetKey)
 		baseName := path.Base(targetKey)

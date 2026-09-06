@@ -310,27 +310,21 @@ func estimateDirBytes(dirPath string) int64 {
 
 // AppendTargetsToConfig appends selected targets safely to config.toml
 func AppendTargetsToConfig(configPath string, newTargets []tui.DiscoveredTarget) error {
-	f, err := os.OpenFile(configPath, os.O_APPEND|os.O_WRONLY, 0644)
+	cfg, err := config.LoadConfig(configPath)
 	if err != nil {
 		return err
 	}
-	defer f.Close()
 
 	for _, t := range newTargets {
 		createBundle := (t.Type == "git")
-		snippet := fmt.Sprintf(`
-[[targets]]
-name = "%s"
-path = "%s"
-type = "%s"
-compression = "zstd"
-create_git_bundle = %t
-`, t.Name, t.Path, t.Type, createBundle)
-
-		if _, err := f.WriteString(snippet); err != nil {
-			return err
-		}
+		cfg.Targets = append(cfg.Targets, config.TargetConfig{
+			Name:            t.Name,
+			Path:            t.Path,
+			Type:            t.Type,
+			Compression:     "zstd",
+			CreateGitBundle: createBundle,
+		})
 	}
 
-	return nil
+	return config.SaveConfig(configPath, cfg)
 }

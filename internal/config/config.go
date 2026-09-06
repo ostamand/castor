@@ -17,8 +17,8 @@ type Config struct {
 	Performance  PerformanceConfig   `toml:"performance"`
 	Safety       SafetyConfig        `toml:"safety"`
 	Security     SecurityConfig      `toml:"security"`
-	Destinations []DestinationConfig `toml:"destinations"`
-	Targets      []TargetConfig      `toml:"targets"`
+	Destinations []DestinationConfig `toml:"destinations,omitempty"`
+	Targets      []TargetConfig      `toml:"targets,omitempty"`
 	Rules        RulesConfig         `toml:"rules"`
 }
 
@@ -45,6 +45,7 @@ type DestinationConfig struct {
 	Location string `toml:"location,omitempty"`
 	Prefix   string `toml:"prefix,omitempty"`
 	Folder   string `toml:"folder,omitempty"` // For Google Drive e.g. "CastorLodge/archives"
+	Path     string `toml:"path,omitempty"`   // For local directory provider e.g. "/mnt/vault"
 }
 
 type TargetConfig struct {
@@ -200,10 +201,12 @@ func (c *Config) Validate() error {
 			if d.Folder == "" {
 				return fmt.Errorf("gdrive destination '%s' requires a folder", d.Name)
 			}
-		case "s3":
-			if d.Bucket == "" {
-				return fmt.Errorf("s3 destination '%s' requires a bucket", d.Name)
+		case "local", "file", "fs":
+			if d.Path == "" {
+				return fmt.Errorf("local destination '%s' requires a path", d.Name)
 			}
+		case "memory":
+			// in-memory provider for testing
 		default:
 			return fmt.Errorf("destination '%s' has unsupported provider '%s'", d.Name, d.Provider)
 		}

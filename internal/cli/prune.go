@@ -3,7 +3,6 @@ package cli
 import (
 	"context"
 	"fmt"
-	"os"
 	"path"
 	"strings"
 
@@ -12,7 +11,6 @@ import (
 	"github.com/ostamand/castor/internal/storage"
 	"github.com/ostamand/castor/internal/tui"
 	"github.com/spf13/cobra"
-	"google.golang.org/api/option"
 )
 
 var (
@@ -34,6 +32,10 @@ func init() {
 }
 
 func runPrune(cmd *cobra.Command, args []string) error {
+	defer func() {
+		pruneDryRun = false
+		pruneYes = false
+	}()
 	ctx := context.Background()
 	configPath := cfgPath
 	if configPath == "" {
@@ -64,19 +66,7 @@ func runPrune(cmd *cobra.Command, args []string) error {
 	// Connect to providers
 	providers := make(map[string]storage.Provider)
 	for _, dest := range cfg.Destinations {
-		var p storage.Provider
-		var initErr error
-		switch dest.Provider {
-		case "gcs":
-			p, initErr = storage.NewGCSProvider(ctx, dest.Name, dest.Bucket, dest.Prefix)
-		case "gdrive":
-			credsPath := config.DefaultCredentialsPath()
-			var opts []option.ClientOption
-			if _, err := os.Stat(credsPath); err == nil {
-				opts = append(opts, option.WithCredentialsFile(credsPath))
-			}
-			p, initErr = storage.NewGDriveProvider(ctx, dest.Name, dest.Folder, opts...)
-		}
+		p, initErr := storage.NewProviderFromConfig(ctx, dest)
 		if initErr == nil {
 			defer p.Close()
 			providers[dest.Name] = p

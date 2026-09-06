@@ -17,7 +17,6 @@ import (
 	"github.com/ostamand/castor/internal/tui"
 	"github.com/spf13/cobra"
 	"golang.org/x/term"
-	"google.golang.org/api/option"
 )
 
 var (
@@ -78,18 +77,7 @@ func runPull(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("destination '%s' not found in config", pullDest)
 	}
 
-	var prov storage.Provider
-	switch activeDest.Provider {
-	case "gcs":
-		prov, err = storage.NewGCSProvider(ctx, activeDest.Name, activeDest.Bucket, activeDest.Prefix)
-	case "gdrive":
-		credsPath := config.DefaultCredentialsPath()
-		var opts []option.ClientOption
-		if _, err := os.Stat(credsPath); err == nil {
-			opts = append(opts, option.WithCredentialsFile(credsPath))
-		}
-		prov, err = storage.NewGDriveProvider(ctx, activeDest.Name, activeDest.Folder, opts...)
-	}
+	prov, err := storage.NewProviderFromConfig(ctx, *activeDest)
 	if err != nil {
 		return fmt.Errorf("failed to connect to provider '%s': %w", activeDest.Name, err)
 	}
@@ -140,10 +128,7 @@ func runPull(cmd *cobra.Command, args []string) error {
 	}
 
 	// Canonical key resolution
-	canonicalKey := selectedTarget
-	if !strings.HasPrefix(canonicalKey, targetNamespace+"/") {
-		canonicalKey = path.Join(targetNamespace, canonicalKey)
-	}
+	canonicalKey := config.ResolveCanonicalKey(selectedTarget, targetNamespace, cfg.Targets)
 
 	// Determine restore destination directory
 	destPath := pullToDir

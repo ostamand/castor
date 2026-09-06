@@ -16,7 +16,6 @@ import (
 	"github.com/ostamand/castor/internal/sysinfo"
 	"github.com/ostamand/castor/internal/tui"
 	"github.com/spf13/cobra"
-	"google.golang.org/api/option"
 )
 
 var (
@@ -82,21 +81,7 @@ func runPush(cmd *cobra.Command, args []string) error {
 	// Initialize cloud storage providers
 	providers := make(map[string]storage.Provider)
 	for _, dest := range cfg.Destinations {
-		var p storage.Provider
-		var initErr error
-
-		switch dest.Provider {
-		case "gcs":
-			p, initErr = storage.NewGCSProvider(ctx, dest.Name, dest.Bucket, dest.Prefix)
-		case "gdrive":
-			credsPath := config.DefaultCredentialsPath()
-			var opts []option.ClientOption
-			if _, err := os.Stat(credsPath); err == nil {
-				opts = append(opts, option.WithCredentialsFile(credsPath))
-			}
-			p, initErr = storage.NewGDriveProvider(ctx, dest.Name, dest.Folder, opts...)
-		}
-
+		p, initErr := storage.NewProviderFromConfig(ctx, dest)
 		if initErr != nil {
 			return fmt.Errorf("failed to initialize provider '%s' (%s): %w", dest.Name, dest.Provider, initErr)
 		}

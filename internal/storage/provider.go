@@ -2,8 +2,13 @@ package storage
 
 import (
 	"context"
+	"fmt"
 	"io"
+	"os"
 	"time"
+
+	"github.com/ostamand/castor/internal/config"
+	"google.golang.org/api/option"
 )
 
 // ObjectInfo holds remote storage metadata for an object
@@ -23,4 +28,25 @@ type Provider interface {
 	List(ctx context.Context, prefix string) ([]ObjectInfo, error)
 	Delete(ctx context.Context, objectName string) error
 	Close() error
+}
+
+// NewProviderFromConfig instantiates any supported storage provider from its configuration
+func NewProviderFromConfig(ctx context.Context, dest config.DestinationConfig) (Provider, error) {
+	switch dest.Provider {
+	case "gcs":
+		return NewGCSProvider(ctx, dest.Name, dest.Bucket, dest.Prefix)
+	case "gdrive":
+		credsPath := config.DefaultCredentialsPath()
+		var opts []option.ClientOption
+		if _, err := os.Stat(credsPath); err == nil {
+			opts = append(opts, option.WithCredentialsFile(credsPath))
+		}
+		return NewGDriveProvider(ctx, dest.Name, dest.Folder, opts...)
+	case "local", "file", "fs":
+		return NewLocalProvider(dest.Name, dest.Path)
+	case "memory":
+		return NewMemoryProvider(dest.Name), nil
+	default:
+		return nil, fmt.Errorf("unknown or unsupported storage provider '%s'", dest.Provider)
+	}
 }
