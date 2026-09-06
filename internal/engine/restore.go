@@ -174,22 +174,43 @@ func RestoreArchive(
 		gitDir := filepath.Join(destDir, ".git")
 		_ = os.RemoveAll(gitDir)
 
-		initCmd := exec.Command("git", "init")
-		initCmd.Dir = destDir
-		if err := initCmd.Run(); err == nil {
-			bundleRel := filepath.Join(".castor", "repo.bundle")
-			fetchCmd := exec.Command("git", "fetch", bundleRel, "refs/*:refs/*")
-			fetchCmd.Dir = destDir
-			if err := fetchCmd.Run(); err == nil {
-				branch := "main"
-				if meta != nil && meta.Git != nil && meta.Git.Branch != "" && meta.Git.Branch != "HEAD" {
-					branch = meta.Git.Branch
-				}
-				checkoutCmd := exec.Command("git", "checkout", branch)
-				checkoutCmd.Dir = destDir
-				_ = checkoutCmd.Run()
-				gitRestored = true
+		// Mirror clone the bundle directly into .git
+		cloneCmd := exec.Command("git", "clone", "--mirror", foundBundlePath, gitDir)
+		if err := cloneCmd.Run(); err == nil {
+			// Convert bare mirror to working-tree repository
+			cfgCmd := exec.Command("git", "-C", destDir, "config", "core.bare", "false")
+			_ = cfgCmd.Run()
+
+			// Align branch HEAD
+			branch := "main"
+			if meta != nil && meta.Git != nil && meta.Git.Branch != "" && meta.Git.Branch != "HEAD" {
+				branch = meta.Git.Branch
 			}
+			checkoutCmd := exec.Command("git", "-C", destDir, "checkout", branch)
+			_ = checkoutCmd.Run()
+
+			// Reset index to HEAD without modifying unpacked files
+			resetCmd := exec.Command("git", "-C", destDir, "reset", "--mixed")
+			_ = resetCmd.Run()
+
+			// Re-enable stash reflog if refs/stash was preserved
+			stashVerify := exec.Command("git", "-C", destDir, "rev-parse", "--verify", "refs/stash")
+			if stashOut, err := stashVerify.Output(); err == nil {
+				stashOID := strings.TrimSpace(string(stashOut))
+				if stashOID != "" {
+					stashMsg := "restored stash"
+					if msgOut, err := exec.Command("git", "-C", destDir, "log", "-1", "--format=%s", stashOID).Output(); err == nil {
+						trimmed := strings.TrimSpace(string(msgOut))
+						if trimmed != "" {
+							stashMsg = trimmed
+						}
+					}
+					_ = exec.Command("git", "-C", destDir, "update-ref", "-d", "refs/stash").Run()
+					_ = exec.Command("git", "-C", destDir, "stash", "store", "-m", stashMsg, stashOID).Run()
+				}
+			}
+
+			gitRestored = true
 		}
 
 		// Remove .castor directory

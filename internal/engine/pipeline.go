@@ -193,10 +193,12 @@ func StreamArchive(
 	if maxGB <= 0 {
 		maxGB = cfg.Safety.MaxArchiveSizeGB
 	}
-	maxBytes := int64(maxGB * 1024 * 1024 * 1024)
-	if cipherBytes > maxBytes {
-		return nil, fmt.Errorf("circuit breaker tripped: archive size (%.2f GB) exceeds ceiling (%.2f GB)",
-			float64(cipherBytes)/(1024*1024*1024), maxGB)
+	if maxGB > 0 {
+		maxBytes := int64(maxGB * 1024 * 1024 * 1024)
+		if cipherBytes > maxBytes {
+			return nil, fmt.Errorf("circuit breaker tripped: archive size (%.2f GB) exceeds ceiling (%.2f GB)",
+				float64(cipherBytes)/(1024*1024*1024), maxGB)
+		}
 	}
 
 	// 7. Write Sidecar Metadata Manifest (.meta.json.age)

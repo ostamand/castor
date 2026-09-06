@@ -19,10 +19,13 @@ func GitFingerprint(repoPath string) (string, *GitMeta, error) {
 	}
 
 	// 1. Get HEAD commit (may be empty on unborn branches/new repos)
-	headCmd := exec.Command("git", "rev-parse", "HEAD")
+	headCmd := exec.Command("git", "rev-parse", "--verify", "HEAD")
 	headCmd.Dir = repoPath
-	headOut, _ := headCmd.Output()
-	headCommit := strings.TrimSpace(string(headOut))
+	headOut, err := headCmd.Output()
+	headCommit := ""
+	if err == nil {
+		headCommit = strings.TrimSpace(string(headOut))
+	}
 
 	// 2. Get current branch
 	branchCmd := exec.Command("git", "rev-parse", "--abbrev-ref", "HEAD")

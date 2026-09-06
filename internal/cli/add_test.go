@@ -101,3 +101,62 @@ func TestScanDirectory(t *testing.T) {
 		}
 	}
 }
+
+func TestScanDirectoryRecursiveAndBoundaries(t *testing.T) {
+	root := t.TempDir()
+
+	// Tree structure:
+	// root/
+	//   groupA/
+	//     project1/ (.git, with internal src/ and internal node_modules/)
+	//     project2/ (.git)
+	//     build/ (junk directory at group level)
+	//   groupB/
+	//     nested/
+	//       project3/ (.git)
+	//     .venv/ (junk directory)
+
+	p1 := filepath.Join(root, "groupA", "project1")
+	_ = os.MkdirAll(filepath.Join(p1, ".git"), 0755)
+	_ = os.MkdirAll(filepath.Join(p1, "src", "nested"), 0755)
+	_ = os.MkdirAll(filepath.Join(p1, "node_modules"), 0755)
+
+	p2 := filepath.Join(root, "groupA", "project2")
+	_ = os.MkdirAll(filepath.Join(p2, ".git"), 0755)
+
+	groupBuild := filepath.Join(root, "groupA", "build")
+	_ = os.MkdirAll(groupBuild, 0755)
+
+	p3 := filepath.Join(root, "groupB", "nested", "project3")
+	_ = os.MkdirAll(filepath.Join(p3, ".git"), 0755)
+
+	groupVenv := filepath.Join(root, "groupB", ".venv")
+	_ = os.MkdirAll(groupVenv, 0755)
+
+	// Scan recursively with git-only=true, maxDepth=4
+	candidates, err := ScanDirectory(root, true, true, 4, "", "git", nil)
+	if err != nil {
+		t.Fatalf("recursive ScanDirectory failed: %v", err)
+	}
+
+	if len(candidates) != 3 {
+		t.Fatalf("expected 3 git repositories, got %d", len(candidates))
+	}
+
+	names := make(map[string]bool)
+	for _, c := range candidates {
+		names[c.Name] = true
+		if c.Type != "git" {
+			t.Errorf("expected type git, got %s for %s", c.Type, c.Name)
+		}
+	}
+
+	if !names["project1"] || !names["project2"] || !names["project3"] {
+		t.Errorf("expected project1, project2, project3; got %v", names)
+	}
+
+	// Invariant: Git internals must NEVER be registered as separate sub-targets
+	if names["src"] || names["nested"] || names["node_modules"] || names["build"] || names[".venv"] {
+		t.Errorf("git subdirectories or build junk leaked into candidate list: %v", names)
+	}
+}
