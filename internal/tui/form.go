@@ -29,7 +29,7 @@ func RunInitForm(defaultNamespace string) (*InitFormResult, error) {
 		GenerateAgeKey: true,
 	}
 
-	theme := huh.ThemeCharm()
+	theme := ThemeCastor()
 
 	// Form 1: Namespace & Providers
 	form1 := huh.NewForm(
@@ -190,7 +190,7 @@ func ConfirmPrompt(title string, description string, defaultVal bool) (bool, err
 		Title(title).
 		Description(description).
 		Value(&confirmed).
-		WithTheme(huh.ThemeCharm()).
+		WithTheme(ThemeCastor()).
 		Run()
 	return confirmed, err
 }
@@ -204,7 +204,7 @@ func ConfirmSecretKeySavedPrompt() (bool, error) {
 		Affirmative("Yes, I've saved it").
 		Negative("Wait, let me copy it").
 		Value(&confirmed).
-		WithTheme(huh.ThemeCharm()).
+		WithTheme(ThemeCastor()).
 		Run()
 	return confirmed, err
 }
@@ -221,7 +221,7 @@ func ConflictResolutionPrompt(targetName, conflictDetail string) (int, error) {
 			huh.NewOption("3. Cancel", 3),
 		).
 		Value(&choice).
-		WithTheme(huh.ThemeCharm()).
+		WithTheme(ThemeCastor()).
 		Run()
 	return choice, err
 }

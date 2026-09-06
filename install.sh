@@ -12,11 +12,11 @@ BINARY_NAME="castor"
 
 # Colors
 BOLD="$(tput bold 2>/dev/null || echo '')"
-AMBER="$(tput setaf 214 2>/dev/null || echo '')"
+ORANGE="$(tput setaf 208 2>/dev/null || tput setaf 214 2>/dev/null || echo '')"
 GREEN="$(tput setaf 34 2>/dev/null || echo '')"
 RESET="$(tput sgr0 2>/dev/null || echo '')"
 
-echo "${BOLD}${AMBER}"
+echo "${BOLD}${ORANGE}"
 cat << 'EOF'
    ____          _             
   / ___|__ _ ___| |_ ___  _ __ 

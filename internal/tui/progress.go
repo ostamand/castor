@@ -63,7 +63,7 @@ func NewLiveDashboard(targetNames []string) *LiveDashboard {
 	s.Style = lipgloss.NewStyle().Foreground(ColorAccent)
 
 	bar := progress.New(
-		progress.WithDefaultGradient(),
+		progress.WithGradient(string(ColorPrimary), string(ColorAccent)),
 		progress.WithWidth(28),
 		progress.WithoutPercentage(),
 	)

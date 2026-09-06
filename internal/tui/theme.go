@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 
+	"github.com/charmbracelet/huh"
 	"github.com/charmbracelet/lipgloss"
 	"golang.org/x/term"
 )
@@ -15,16 +16,31 @@ func IsTTY() bool {
 
 // Color Palette - Castor Beaver & Cold Vault Theme
 var (
-	ColorPrimary   = lipgloss.Color("#D97706") // Warm Beaver Amber
-	ColorSecondary = lipgloss.Color("#92400E") // Deep Timber Wood
-	ColorAccent    = lipgloss.Color("#F59E0B") // Golden Lodge Glow
+	ColorPrimary   = lipgloss.Color("#EA580C") // Deep Beaver Orange
+	ColorSecondary = lipgloss.Color("#9A3412") // Deep Timber Wood
+	ColorAccent    = lipgloss.Color("#F97316") // Vibrant Castor Orange
 	ColorSuccess   = lipgloss.Color("#10B981") // Forest Green
-	ColorWarning   = lipgloss.Color("#F97316") // Safety Orange
+	ColorWarning   = lipgloss.Color("#FB923C") // Warm Safety Amber-Orange
 	ColorDanger    = lipgloss.Color("#EF4444") // Coral Red
 	ColorMuted     = lipgloss.Color("#6B7280") // Slate Gray
 	ColorHighlight = lipgloss.Color("#06B6D4") // Cold Storage Cyan
 	ColorDarkBg    = lipgloss.Color("#1F2937") // Night Slate
 )
+
+// ThemeCastor returns a custom Huh theme matching Castor's orange accent and timber palette
+func ThemeCastor() *huh.Theme {
+	t := huh.ThemeCharm()
+	t.Focused.Base = t.Focused.Base.BorderForeground(ColorAccent)
+	t.Focused.Title = t.Focused.Title.Foreground(ColorAccent)
+	t.Focused.SelectSelector = t.Focused.SelectSelector.Foreground(ColorAccent)
+	t.Focused.MultiSelectSelector = t.Focused.MultiSelectSelector.Foreground(ColorAccent)
+	t.Focused.SelectedOption = t.Focused.SelectedOption.Foreground(ColorAccent)
+	t.Focused.SelectedPrefix = t.Focused.SelectedPrefix.Foreground(ColorAccent)
+	t.Focused.FocusedButton = t.Focused.FocusedButton.Background(ColorAccent).Foreground(lipgloss.Color("#FFFFFF"))
+	t.Focused.TextInput.Cursor = t.Focused.TextInput.Cursor.Foreground(ColorAccent)
+	t.Focused.TextInput.Prompt = t.Focused.TextInput.Prompt.Foreground(ColorAccent)
+	return t
+}
 
 // Base Lipgloss Styles
 var (
