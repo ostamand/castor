@@ -53,24 +53,32 @@ esac
 echo "Detected platform: ${BOLD}${OS}/${ARCH}${RESET}"
 
 # 2. Determine installation directory
-INSTALL_DIR="/usr/local/bin"
+INSTALL_DIR="${CASTOR_INSTALL_DIR:-}"
 USE_SUDO=false
 
-if [ ! -w "$INSTALL_DIR" ]; then
-  if command -v sudo >/dev/null 2>&1 && [ -t 0 ]; then
+if [ -z "$INSTALL_DIR" ]; then
+  if [ -w "/usr/local/bin" ]; then
+    INSTALL_DIR="/usr/local/bin"
+  elif sudo -n true 2>/dev/null; then
+    INSTALL_DIR="/usr/local/bin"
     USE_SUDO=true
   else
-    # Fallback to user home ~/.local/bin
     INSTALL_DIR="${HOME}/.local/bin"
-    mkdir -p "$INSTALL_DIR"
-    case ":$PATH:" in
-      *:"$INSTALL_DIR":*) ;;
-      *)
-        echo "Note: ${INSTALL_DIR} is not in your \$PATH. Add it to your ~/.bashrc or ~/.zshrc."
-        ;;
-    esac
   fi
 fi
+
+mkdir -p "$INSTALL_DIR"
+
+if [ ! -w "$INSTALL_DIR" ] && command -v sudo >/dev/null 2>&1; then
+  USE_SUDO=true
+fi
+
+case ":$PATH:" in
+  *:"$INSTALL_DIR":*) ;;
+  *)
+    echo "Note: ${INSTALL_DIR} is not currently in your \$PATH. Consider adding it to your ~/.bashrc or ~/.zshrc."
+    ;;
+esac
 
 TMP_DIR="$(mktemp -d)"
 cleanup() {
@@ -81,27 +89,40 @@ trap cleanup EXIT
 TARGET_BIN="${TMP_DIR}/${BINARY_NAME}"
 DOWNLOADED=false
 
-# 3. Attempt to download latest precompiled release binary
-echo "Fetching latest release information..."
-RELEASE_JSON="$(curl -sSL -H "Accept: application/vnd.github.v3+json" "$API_URL" 2>/dev/null || echo '{}')"
-TAG_NAME="$(echo "$RELEASE_JSON" | grep '"tag_name":' | head -n1 | cut -d '"' -f 4 || echo '')"
-
-ASSET_NAME="castor-${OS}-${ARCH}"
-DOWNLOAD_URL=""
-
-if [ -n "$TAG_NAME" ]; then
-  DOWNLOAD_URL="$(echo "$RELEASE_JSON" | grep "browser_download_url.*${ASSET_NAME}" | head -n1 | cut -d '"' -f 4 || echo '')"
-fi
-
-if [ -n "$DOWNLOAD_URL" ]; then
-  echo "Downloading ${TAG_NAME} (${ASSET_NAME})..."
-  if curl -fsSL "$DOWNLOAD_URL" -o "$TARGET_BIN"; then
-    chmod +x "$TARGET_BIN"
+# 3. Check if running inside local castor repository
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" 2>/dev/null && pwd || pwd)"
+if [ -f "${SCRIPT_DIR}/go.mod" ] && grep -q "github.com/${REPO}" "${SCRIPT_DIR}/go.mod" 2>/dev/null; then
+  if command -v go >/dev/null 2>&1; then
+    echo "Detected local Castor repository at ${SCRIPT_DIR}."
+    echo "Building binary from local source..."
+    (cd "$SCRIPT_DIR" && go build -ldflags="-s -w" -o "$TARGET_BIN" ./cmd/castor)
     DOWNLOADED=true
   fi
 fi
 
-# 4. Fallback if precompiled release asset is not yet available: build from Go
+# 4. Attempt to download latest precompiled release binary if not built locally
+if [ "$DOWNLOADED" = false ]; then
+  echo "Fetching latest release information from GitHub..."
+  RELEASE_JSON="$(curl -sSL -H "Accept: application/vnd.github.v3+json" "$API_URL" 2>/dev/null || echo '{}')"
+  TAG_NAME="$(echo "$RELEASE_JSON" | grep '"tag_name":' | head -n1 | cut -d '"' -f 4 || echo '')"
+
+  ASSET_NAME="castor-${OS}-${ARCH}"
+  DOWNLOAD_URL=""
+
+  if [ -n "$TAG_NAME" ]; then
+    DOWNLOAD_URL="$(echo "$RELEASE_JSON" | grep "browser_download_url.*${ASSET_NAME}" | head -n1 | cut -d '"' -f 4 || echo '')"
+  fi
+
+  if [ -n "$DOWNLOAD_URL" ]; then
+    echo "Downloading ${TAG_NAME} (${ASSET_NAME})..."
+    if curl -fsSL "$DOWNLOAD_URL" -o "$TARGET_BIN"; then
+      chmod +x "$TARGET_BIN"
+      DOWNLOADED=true
+    fi
+  fi
+fi
+
+# 5. Fallback if precompiled release asset is not yet available: build from Go remote
 if [ "$DOWNLOADED" = false ]; then
   if command -v go >/dev/null 2>&1; then
     echo "No precompiled binary asset found for ${OS}/${ARCH}. Building from source with Go..."
@@ -129,8 +150,13 @@ SKILLS_DIR="${HOME}/.gemini/config/skills"
 echo "Installing Castor LLM agent skills to ${SKILLS_DIR}..."
 mkdir -p "${SKILLS_DIR}/castor-cli" "${SKILLS_DIR}/castor-customizer"
 
-curl -fsSL "${RAW_URL}/skills/castor-cli/SKILL.md" -o "${SKILLS_DIR}/castor-cli/SKILL.md" 2>/dev/null || true
-curl -fsSL "${RAW_URL}/skills/castor-customizer/SKILL.md" -o "${SKILLS_DIR}/castor-customizer/SKILL.md" 2>/dev/null || true
+if [ -d "${SCRIPT_DIR}/skills/castor-cli" ]; then
+  cp -f "${SCRIPT_DIR}/skills/castor-cli/SKILL.md" "${SKILLS_DIR}/castor-cli/SKILL.md"
+  cp -f "${SCRIPT_DIR}/skills/castor-customizer/SKILL.md" "${SKILLS_DIR}/castor-customizer/SKILL.md"
+else
+  curl -fsSL "${RAW_URL}/skills/castor-cli/SKILL.md" -o "${SKILLS_DIR}/castor-cli/SKILL.md" 2>/dev/null || true
+  curl -fsSL "${RAW_URL}/skills/castor-customizer/SKILL.md" -o "${SKILLS_DIR}/castor-customizer/SKILL.md" 2>/dev/null || true
+fi
 
 echo
 echo "${GREEN}${BOLD}✔ Castor installed successfully!${RESET}"
