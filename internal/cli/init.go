@@ -63,6 +63,12 @@ func runInit(cmd *cobra.Command, args []string) error {
 				Provider: "gdrive",
 				Folder:   formResult.GDriveFolder,
 			})
+		case "local":
+			cfg.Destinations = append(cfg.Destinations, config.DestinationConfig{
+				Name:     "local-backup",
+				Provider: "local",
+				Path:     formResult.LocalPath,
+			})
 		}
 	}
 

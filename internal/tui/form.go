@@ -9,21 +9,23 @@ import (
 
 // InitFormResult captures user choices from the castor init wizard
 type InitFormResult struct {
-	Namespace       string
-	Providers       []string
-	GCSBucket       string
-	GCSLocation     string
-	GDriveFolder    string
-	GenerateAgeKey  bool
-	ExistingPubKey  string
+	Namespace      string
+	Providers      []string
+	GCSBucket      string
+	GCSLocation    string
+	GDriveFolder   string
+	LocalPath      string
+	GenerateAgeKey bool
+	ExistingPubKey string
 }
 
 // RunInitForm launches an interactive setup wizard using Charm's Huh
 func RunInitForm(defaultNamespace string) (*InitFormResult, error) {
 	result := &InitFormResult{
-		Namespace:    defaultNamespace,
-		GCSLocation:  "northamerica-northeast1",
-		GDriveFolder: "CastorLodge/archives",
+		Namespace:      defaultNamespace,
+		GCSLocation:    "northamerica-northeast1",
+		GDriveFolder:   "CastorLodge/archives",
+		LocalPath:      "~/Backups/castor",
 		GenerateAgeKey: true,
 	}
 
@@ -54,7 +56,7 @@ func RunInitForm(defaultNamespace string) (*InitFormResult, error) {
 				Options(
 					huh.NewOption("Google Cloud Storage (GCS) — Fast, low-cost long-term cloud storage", "gcs").Selected(true),
 					huh.NewOption("Google Drive — Back up directly to your personal or Workspace Drive", "gdrive").Selected(true),
-					huh.NewOption("Amazon S3 & S3-Compatible — AWS, Cloudflare R2, MinIO, or Backblaze", "s3"),
+					huh.NewOption("Local or External Drive / NAS — Back up to a local directory, USB drive, or NAS", "local"),
 				).
 				Value(&result.Providers).
 				Validate(func(v []string) error {
@@ -75,12 +77,16 @@ func RunInitForm(defaultNamespace string) (*InitFormResult, error) {
 
 	hasGCS := false
 	hasGDrive := false
+	hasLocal := false
 	for _, p := range result.Providers {
 		if p == "gcs" {
 			hasGCS = true
 		}
 		if p == "gdrive" {
 			hasGDrive = true
+		}
+		if p == "local" {
+			hasLocal = true
 		}
 	}
 
@@ -111,6 +117,22 @@ func RunInitForm(defaultNamespace string) (*InitFormResult, error) {
 				Description("Folder in your Google Drive where archives will be stored").
 				Placeholder("CastorLodge/archives").
 				Value(&result.GDriveFolder).
+				Validate(func(s string) error {
+					if strings.TrimSpace(s) == "" {
+						return fmt.Errorf("folder path cannot be empty")
+					}
+					return nil
+				}),
+		))
+	}
+
+	if hasLocal {
+		groups = append(groups, huh.NewGroup(
+			huh.NewInput().
+				Title("Local or NAS Folder Path").
+				Description("Directory path on your local disk, external drive, or NAS mount").
+				Placeholder("~/Backups/castor or /mnt/backup").
+				Value(&result.LocalPath).
 				Validate(func(s string) error {
 					if strings.TrimSpace(s) == "" {
 						return fmt.Errorf("folder path cannot be empty")
