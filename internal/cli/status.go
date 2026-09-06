@@ -16,7 +16,7 @@ import (
 
 var statusCmd = &cobra.Command{
 	Use:     "status",
-	Aliases: []string{"diff"},
+	Aliases: []string{"stat", "st"},
 	Short:   "Show drift between local targets and cloud state, timer health, and orphans",
 	Long:    "Inspects local target drift against cloud sync state, validates timer health, and checks for orphaned remote archives.",
 	RunE:    runStatus,

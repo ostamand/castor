@@ -216,6 +216,69 @@ func TestFullCLIIntegrationLifecycle(t *testing.T) {
 		t.Errorf("expected successful verify output, got: %s", verifyOut)
 	}
 
+	// 10a. Test `castor inspect`
+	inspectOut, err := executeCommand("inspect", "app-a", "--key", kp.SecretKey, "--config", configPath)
+	if err != nil {
+		t.Fatalf("inspect failed: %v\nOutput: %s", err, inspectOut)
+	}
+	if !strings.Contains(inspectOut, "main.go") || !strings.Contains(inspectOut, "untracked.env") {
+		t.Errorf("expected inspect to show main.go and untracked.env, got: %s", inspectOut)
+	}
+	if !strings.Contains(inspectOut, ".castor/repo.bundle") {
+		t.Errorf("expected inspect to show .castor/repo.bundle, got: %s", inspectOut)
+	}
+
+	// Test inspect with pattern filter
+	inspectPatternOut, err := executeCommand("inspect", "app-a", "--key", kp.SecretKey, "--pattern", "*.go", "--config", configPath)
+	if err != nil {
+		t.Fatalf("inspect with pattern failed: %v\nOutput: %s", err, inspectPatternOut)
+	}
+	if !strings.Contains(inspectPatternOut, "main.go") || strings.Contains(inspectPatternOut, "untracked.env") {
+		t.Errorf("expected pattern filter to include main.go and exclude untracked.env, got: %s", inspectPatternOut)
+	}
+
+	// 10b. Test `castor cat`
+	catStdout, err := executeCommand("cat", "app-a", "untracked.env", "--key", kp.SecretKey, "--config", configPath)
+	if err != nil {
+		t.Fatalf("cat failed: %v\nOutput: %s", err, catStdout)
+	}
+	if !strings.Contains(catStdout, "SECRET_KEY=12345") {
+		t.Errorf("cat expected to stream untracked.env contents, got: %s", catStdout)
+	}
+
+	// Test cat with --out flag
+	catOutFile := filepath.Join(restoreDir, "cat-main.go")
+	catFileOut, err := executeCommand("cat", "app-a", "main.go", "--key", kp.SecretKey, "--out", catOutFile, "--config", configPath)
+	if err != nil {
+		t.Fatalf("cat --out failed: %v\nOutput: %s", err, catFileOut)
+	}
+	catReadBytes, err := os.ReadFile(catOutFile)
+	if err != nil || !strings.Contains(string(catReadBytes), "package main") {
+		t.Errorf("cat --out file content mismatch: %s (%v)", string(catReadBytes), err)
+	}
+
+	// 10c. Test `castor diff` (clean state -> in sync)
+	diffSyncOut, err := executeCommand("diff", "app-a", "--key", kp.SecretKey, "--config", configPath)
+	if err != nil {
+		t.Fatalf("diff failed: %v\nOutput: %s", err, diffSyncOut)
+	}
+	if !strings.Contains(diffSyncOut, "IN SYNC") {
+		t.Errorf("expected diff to show IN SYNC, got: %s", diffSyncOut)
+	}
+
+	// 10d. Test `castor diff` after local modification -> dirty drift
+	newDraftFile := filepath.Join(appADir, "draft.txt")
+	_ = os.WriteFile(newDraftFile, []byte("uncommitted change"), 0644)
+
+	diffDriftOut, err := executeCommand("diff", "app-a", "--key", kp.SecretKey, "--config", configPath)
+	if err != nil {
+		t.Fatalf("diff after edit failed: %v\nOutput: %s", err, diffDriftOut)
+	}
+	if !strings.Contains(diffDriftOut, "DIRTY DRIFT") {
+		t.Errorf("expected diff to show DIRTY DRIFT, got: %s", diffDriftOut)
+	}
+	_ = os.Remove(newDraftFile) // revert back to clean state for pull test
+
 	// 11. Test `castor pull` (full restore of Git repo, stashes, and untracked files)
 	destAppA := filepath.Join(restoreDir, "app-a")
 	pullOut, err := executeCommand("pull", "app-a", "--to", destAppA, "--key", kp.SecretKey, "--force", "--config", configPath)

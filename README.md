@@ -136,7 +136,33 @@ Streams archive down, tests in-memory Age decryption, and validates SHA-256 agai
   * `-k, --key <string>` *(optional, string)*: Age secret key (or set `CASTOR_AGE_KEY`).
 
 ### `castor status`
-Displays drift between local targets and cloud state, systemd timer health, and orphaned archives.
+Displays drift between local targets and local state cache, systemd timer health, and orphaned archives.
+
+### `castor diff [target] [flags]`
+Compares active local workspaces against remote sidecar metadata manifests (`.meta.json.age`) in the vault without downloading the full archive.
+* **Flags:**
+  * `-k, --key <string>`: Age secret key (or export `CASTOR_AGE_KEY`).
+  * `-d, --dest <string>`: Destination to compare against.
+  * `-s, --namespace <string>`: Target namespace to inspect.
+  * `--json`: Emit machine-readable JSON drift summary.
+
+### `castor inspect <target> [flags]`
+Decompresses and decrypts the remote archive stream directly in memory, displaying the full file table with sizes and permissions without extracting to disk.
+* **Aliases:** `view`, `info`
+* **Flags:**
+  * `-k, --key <string>`: Age secret key (or export `CASTOR_AGE_KEY`).
+  * `-p, --pattern <string>`: Filter file paths by glob pattern (e.g. `*.go`, `config/*`).
+  * `-d, --dest <string>`: Specific destination to inspect.
+  * `-s, --namespace <string>`: Namespace to inspect.
+  * `--json`: Emit archive manifest and entry list as JSON.
+
+### `castor cat <target> <file-path> [flags]`
+Streams a single file directly from the remote archive to `stdout` or an output path and immediately aborts the stream once transferred.
+* **Flags:**
+  * `-k, --key <string>`: Age secret key (or export `CASTOR_AGE_KEY`).
+  * `-o, --out <path>`: Write output to a local file instead of standard output.
+  * `-d, --dest <string>`: Specific destination to read from.
+  * `-s, --namespace <string>`: Namespace to inspect.
 
 ### `castor prune [flags]`
 Garbage-collects cloud archives that were removed from `config.toml`.
