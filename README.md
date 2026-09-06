@@ -235,7 +235,22 @@ make build
 * **100% Git Reconstitution (`pipeline_restore_test.go`):** Validates that `.castor/repo.bundle` reconstitutes the entire committed history, all local branch heads, active stashes (`git stash list` & `git stash pop`), and uncommitted working-tree edits.
 * **Live Shifting-File Safety (`archive_test.go`):** Verifies that `copyWithBound` clamps files that grow dynamically during tar streaming and zero-pads shrinking/vanished files without corrupting the tar stream.
 * **Microsecond Tree Drift (`fingerprint_test.go`):** Tests state transitions across clean commits, unstaged changes, staged additions, untracked files, and stashes to guarantee zero false transfers.
-* **Multi-Cloud Concurrency & Failure Isolation (`multiwriter_test.go`):** Verifies concurrent broadcast streaming across cloud destinations with per-destination error isolation.
+---
+
+## LLM & Agent Skills (Customization via AI)
+
+Castor ships with built-in agent skills stored inside the repository (`skills/`) to allow LLMs and autonomous coding assistants to safely operate, customize, and extend Castor:
+
+| Skill | Path | Description |
+| :--- | :--- | :--- |
+| `castor-cli` | [`skills/castor-cli/SKILL.md`](./skills/castor-cli/SKILL.md) | Teaches LLMs how to operate the CLI, run backups, restore archives, verify integrity, and inspect drift. |
+| `castor-customizer` | [`skills/castor-customizer/SKILL.md`](./skills/castor-customizer/SKILL.md) | Guides LLMs on modifying `config.toml`, adding targets, implementing custom storage providers in Go, and tuning compression. |
+
+To link these skills into your local agent environment (similarly to Omarchy):
+```bash
+make install-skills
+```
+This creates symlinks from the repository into `~/.gemini/config/skills/`, ensuring that any updates in the repo are immediately reflected to your LLM assistant.
 
 ---
 
