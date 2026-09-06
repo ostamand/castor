@@ -5,7 +5,7 @@ INSTALL_PATH := /usr/local/bin
 SKILLS_SRC := $(CURDIR)/skills
 SKILLS_DEST := $(HOME)/.gemini/config/skills
 
-.PHONY: all build test clean install install-skills uninstall-skills tidy fmt lint
+.PHONY: all build test clean install install-skills uninstall-skills uninstall uninstall-all tidy fmt lint
 
 all: build
 
@@ -41,3 +41,14 @@ uninstall-skills:
 
 install: build install-skills
 	install -m 755 bin/$(BINARY_NAME) $(INSTALL_PATH)/$(BINARY_NAME)
+
+uninstall: uninstall-skills
+	@systemctl --user disable --now castor.timer 2>/dev/null || true
+	@rm -f $(HOME)/.config/systemd/user/castor.service $(HOME)/.config/systemd/user/castor.timer
+	@systemctl --user daemon-reload 2>/dev/null || true
+	@rm -f $(INSTALL_PATH)/$(BINARY_NAME)
+	@echo "✔ Castor binary, systemd timer, and skills uninstalled."
+
+uninstall-all: uninstall
+	@rm -rf $(HOME)/.config/castor
+	@echo "✔ Removed Castor configuration and local state (~/.config/castor)."

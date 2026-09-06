@@ -111,3 +111,34 @@ WantedBy=timers.target
 	_ = exec.Command("systemctl", "--user", "daemon-reload").Run()
 	return nil
 }
+
+// EnableSystemdTimer writes units and activates the timer
+func EnableSystemdTimer(castorBinaryPath string) error {
+	if err := GenerateSystemdUnits(castorBinaryPath); err != nil {
+		return err
+	}
+	cmd := exec.Command("systemctl", "--user", "enable", "--now", "castor.timer")
+	if out, err := cmd.CombinedOutput(); err != nil {
+		return fmt.Errorf("systemctl enable failed: %s (%w)", string(out), err)
+	}
+	return nil
+}
+
+// DisableSystemdTimer deactivates the timer
+func DisableSystemdTimer() error {
+	cmd := exec.Command("systemctl", "--user", "disable", "--now", "castor.timer")
+	if out, err := cmd.CombinedOutput(); err != nil {
+		return fmt.Errorf("systemctl disable failed: %s (%w)", string(out), err)
+	}
+	return nil
+}
+
+// TriggerSystemdRun triggers an immediate backup via systemd
+func TriggerSystemdRun() error {
+	cmd := exec.Command("systemctl", "--user", "start", "castor.service")
+	if out, err := cmd.CombinedOutput(); err != nil {
+		return fmt.Errorf("systemctl start failed: %s (%w)", string(out), err)
+	}
+	return nil
+}
+

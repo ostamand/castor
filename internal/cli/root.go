@@ -47,6 +47,7 @@ func init() {
 	RootCmd.AddCommand(verifyCmd)
 	RootCmd.AddCommand(pruneCmd)
 	RootCmd.AddCommand(authCmd)
+	RootCmd.AddCommand(scheduleCmd)
 	RootCmd.AddCommand(doctorCmd)
 	RootCmd.AddCommand(upgradeCmd)
 }
