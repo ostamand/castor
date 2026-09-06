@@ -15,8 +15,9 @@
 * **First-Class Storage Backends:**
   * **Google Cloud Storage (GCS):** Automatic Nearline/Coldline/Archive lifecycle management ($0.004/GB/mo).
   * **Google Drive:** Zero-knowledge streaming directly to a designated folder via Google Drive REST API v3 using personal Google One / Workspace quota.
-* **Interactive Terminal UI:** Built with the Charm ecosystem (`bubbletea`, `huh`, `lipgloss`, `bubbles`) featuring split-pane checklists, live streaming progress bars, and fuzzy-search archive explorers.
-* **Defensive Live Archiving:** Bounded file reads prevent stream crashes when working on live projects with active background compilers or shifting files.
+  * **Local Filesystem / NAS / External Drive:** Stream directly to local mount points, external backup drives, or local NAS (`provider = "local"`).
+* **Interactive Terminal UI:** Built with the Charm ecosystem (`bubbletea`, `huh`, `lipgloss`, `bubbles`) featuring split-pane checklists, live streaming progress bars, and fuzzy-search archive explorers (with automatic non-TTY fallback for systemd/cron).
+* **Defensive Live Archiving:** Bounded file reads (`copyWithBound`) prevent stream crashes when working on live projects with active background compilers or shifting files.
 * **In-Memory Verification (`castor verify`):** Validates archive decryptability and SHA-256 integrity against encrypted sidecars without unpacking to disk.
 
 ---
@@ -68,9 +69,13 @@ Launch the interactive fuzzy-search archive picker:
 ```bash
 castor pull
 ```
-Or restore directly to original path:
+Or restore directly by target name or custom destination:
 ```bash
-castor pull user/projects/rollmind
+# Restore to original workspace:
+castor pull rollmind
+
+# Or restore to a custom location:
+castor pull rollmind --to /tmp/restored-project --key $AGE_KEY
 ```
 
 ---
@@ -178,18 +183,26 @@ name = "gdrive-mirror"
 provider = "gdrive"
 folder = "CastorLodge/archives"
 
+[[destinations]]
+name = "backup-disk"
+provider = "local"
+path = "/mnt/backup/castor-vault"
+
 [[targets]]
+name = "rollmind"
 path = "~/projects/rollmind"
 type = "git"
 compression = "zstd"
 create_git_bundle = true
 
 [[targets]]
+name = "documents-vault"
 path = "~/Documents/Vault"
 type = "documents"
 compression = "xz"
 
 [[targets]]
+name = "caddy"
 path = "/etc/caddy"
 type = "documents"
 compression = "zstd"
@@ -202,6 +215,27 @@ excludes = [
     "target", "bin", "obj", "*.log", ".DS_Store"
 ]
 ```
+
+---
+
+## Testing & Quality Assurance
+
+Castor includes a comprehensive regression and end-to-end integration test suite executed with Go's race detector enabled:
+
+```bash
+# Run all unit, regression, and full CLI integration tests
+make test
+
+# Compile binary into bin/castor
+make build
+```
+
+### Key Areas Tested
+* **Full CLI Lifecycle Integration (`cli_integration_test.go`):** Exercises the complete sequence (`doctor` → `add` → `status` → `push` → `ls` → `verify` → `pull` → `prune`) in an isolated sandbox.
+* **100% Git Reconstitution (`pipeline_restore_test.go`):** Validates that `.castor/repo.bundle` reconstitutes the entire committed history, all local branch heads, active stashes (`git stash list` & `git stash pop`), and uncommitted working-tree edits.
+* **Live Shifting-File Safety (`archive_test.go`):** Verifies that `copyWithBound` clamps files that grow dynamically during tar streaming and zero-pads shrinking/vanished files without corrupting the tar stream.
+* **Microsecond Tree Drift (`fingerprint_test.go`):** Tests state transitions across clean commits, unstaged changes, staged additions, untracked files, and stashes to guarantee zero false transfers.
+* **Multi-Cloud Concurrency & Failure Isolation (`multiwriter_test.go`):** Verifies concurrent broadcast streaming across cloud destinations with per-destination error isolation.
 
 ---
 
