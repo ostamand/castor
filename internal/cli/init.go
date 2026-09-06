@@ -118,7 +118,7 @@ Because Castor uses true end-to-end encryption, this key is the only way to rest
 
 	fmt.Println()
 	fmt.Println(tui.StyleBold.Render("What to do next:"))
-	fmt.Println("  1. Add projects to back up   : " + lipgloss.NewStyle().Foreground(tui.ColorAccent).Render("castor add ~/projects -r --git-only"))
+	fmt.Println("  1. Add a folder to back up   : " + lipgloss.NewStyle().Foreground(tui.ColorAccent).Render("castor add ~/projects"))
 	fmt.Println("  2. Preview your backup plan  : " + lipgloss.NewStyle().Foreground(tui.ColorAccent).Render("castor push -n"))
 	fmt.Println("  3. Run your first backup     : " + lipgloss.NewStyle().Foreground(tui.ColorAccent).Render("castor push"))
 	fmt.Println("  4. Turn on automated schedule: " + lipgloss.NewStyle().Foreground(tui.ColorAccent).Render("castor schedule on"))

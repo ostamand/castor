@@ -61,11 +61,12 @@ Run the interactive onboarding wizard to configure your namespace, cloud backend
 castor init
 ```
 
-### 2. Discover & Register Projects
-Recursively scan and register all Git repositories under a parent directory:
+### 2. Add a Folder to Back Up
+Register a folder or project to back up:
 ```bash
-castor add ~/projects -r --git-only
+castor add ~/projects
 ```
+*(Tip: Use `castor add ~/projects -r --git-only` to scan and add multiple Git repositories at once)*
 
 ### 3. Inspect Backup Plan (Dry Run)
 Inspect what changed and what will be streamed to the cloud:
