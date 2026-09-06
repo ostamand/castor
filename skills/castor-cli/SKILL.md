@@ -28,8 +28,10 @@ Command | Description | Common Flags
 `castor verify [target]` | In-memory stream decryption & ciphertext SHA-256 validation | `-k <key>`, `--dest <name>`
 `castor ls` | List remote archives, byte sizes, and timestamps | `-s <ns>`, `--all-namespaces`, `--dest <name>`
 `castor prune` | Garbage-collect remote archives no longer registered in config | `-n`, `-y`
+`castor schedule [on|off]` | Manage automated nightly background timers | `on`, `off`, `status`, `run`
 `castor doctor` | Comprehensive health check of tools, Age keys, timer, and providers | `--config, -c`
 `castor auth` | Manage Google Cloud and Google Drive OAuth credentials | `login`, `status`, `logout`
+`castor uninstall` | Completely uninstall Castor binary, timers, and skills | `-y`, `--purge`
 
 --------------------------------------------------------------------------------
 

@@ -50,6 +50,7 @@ func init() {
 	RootCmd.AddCommand(scheduleCmd)
 	RootCmd.AddCommand(doctorCmd)
 	RootCmd.AddCommand(upgradeCmd)
+	RootCmd.AddCommand(uninstallCmd)
 }
 
 // Execute runs the root command

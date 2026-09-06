@@ -191,6 +191,20 @@ Manages Google Cloud Storage and Google Drive OAuth credentials.
 ### `castor doctor`
 Diagnoses system tools (`git`), systemd timers, Age keys, and cloud reachability.
 
+### `castor schedule [on|off|status|run]`
+Turns automated background backups on or off using Linux user systemd timers.
+* **Subcommands / Arguments:**
+  * `on` / `enable`: Activates nightly background backups (03:00 AM, AC power only).
+  * `off` / `disable`: Deactivates automated background runs.
+  * `status`: Displays active state and next run timestamp.
+  * `run`: Triggers a background backup immediately.
+
+### `castor uninstall [flags]`
+Completely uninstalls Castor from your system without needing the source repository or Makefile.
+* **Flags:**
+  * `-y, --yes`: Non-interactive confirmation.
+  * `--purge`: Also permanently deletes `~/.config/castor` (configuration and Age encryption keys). Preserved by default to prevent accidental loss of vault access.
+
 ---
 
 ## Configuration Reference (`~/.config/castor/config.toml`)
