@@ -24,6 +24,12 @@
 
 ## Installation
 
+### One-Liner (Recommended)
+```bash
+curl -fsSL https://raw.githubusercontent.com/ostamand/castor/main/install.sh | bash
+```
+*Detects your OS and CPU architecture, installs the binary, and sets up LLM agent skills.*
+
 ### From Source
 ```bash
 git clone https://github.com/ostamand/castor.git
@@ -34,6 +40,15 @@ make install
 ### Self-Upgrade
 ```bash
 castor upgrade
+```
+
+### Uninstallation
+```bash
+# Clean binary, systemd user timer, and skills:
+make uninstall
+
+# Or completely purge including config & local state (~/.config/castor):
+make uninstall-all
 ```
 
 ---
