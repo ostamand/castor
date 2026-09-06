@@ -237,7 +237,7 @@ prefix = "archives"
 [[destinations]]
 name = "gdrive-mirror"
 provider = "gdrive"
-folder = "CastorLodge/archives"
+folder = "CastorLodge"
 
 [[destinations]]
 name = "backup-disk"

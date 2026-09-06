@@ -71,18 +71,17 @@ Developers frequently work across multiple computers, projects, or distinct scop
 * Distinct work domains (`work` vs `personal`)
 * A server or homelab (`homelab`)
 
-If these share a common GCS bucket (`gs://my-vault`) or Google Drive folder (`CastorLodge/archives`), a flat storage structure would cause severe collisions whenever two scopes have a project in the same relative path (e.g. `~/projects/rollmind`).
+If these share a common GCS bucket (`gs://my-vault`) or Google Drive folder (`CastorLodge`), a flat storage structure would cause severe collisions whenever two scopes have a project in the same relative path (e.g. `~/projects/rollmind`).
 
 Castor solves this cleanly by making **namespace a primary partition**:
 ```
 CastorLodge/
-└── archives/
-    ├── workstation/                   <- Namespace 1
-    │   ├── user/
-    │   │   ├── projects/
-    │   │   │   ├── rollmind.tar.zst.age
-    │   │   │   └── rollmind.meta.json.age
-    │   │   └── Documents/
+├── workstation/                   <- Namespace 1
+│   ├── user/
+│   │   ├── projects/
+│   │   │   ├── rollmind.tar.zst.age
+│   │   │   └── rollmind.meta.json.age
+│   │   └── Documents/
     │   │       └── Vault.tar.xz.age
     │   └── system/
     │       └── etc/caddy.tar.zst.age
@@ -175,7 +174,7 @@ Castor leverages the **Charm ecosystem** (`bubbletea`, `huh`, `lipgloss`, `bubbl
   Location:    northamerica-northeast1
 
 ? Google Drive Configuration
-  Folder:      CastorLodge/archives
+  Folder:      CastorLodge
 
 ? Age Encryption Key
   [X] Generate new write-only Age keypair (Recommended)
@@ -331,8 +330,8 @@ type Provider interface {
 
 ### 6.3 Google Drive Provider
 * **Library:** `google.golang.org/api/drive/v3`
-* **Root Hierarchy:** Operates inside a configurable root folder (default: `CastorLodge/archives`).
-* **Folder Hierarchy Auto-Resolution:** Recursively resolves path segments (e.g. `CastorLodge` → `archives` → `workstation` → `user` → `projects`), creating missing folder nodes dynamically with `mimeType = "application/vnd.google-apps.folder"`. Resolved folder IDs are cached in memory.
+* **Root Hierarchy:** Operates inside a configurable root folder (default: `CastorLodge`).
+* **Folder Hierarchy Auto-Resolution:** Recursively resolves path segments (e.g. `CastorLodge` → `workstation` → `user` → `projects`), creating missing folder nodes dynamically with `mimeType = "application/vnd.google-apps.folder"`. Resolved folder IDs are cached in memory.
 * **Deduplication Handling:** Google Drive permits multiple files with identical names in the same folder. Castor queries the parent folder ID for existing files with matching names:
   * If file exists: calls `service.Files.Update(fileID, nil).Media(pr).Do()`.
   * If file is new: calls `service.Files.Create(meta).Media(pr).Do()`.
@@ -418,7 +417,7 @@ prefix = "archives"
 [[destinations]]
 name = "gdrive-mirror"
 provider = "gdrive"
-folder = "CastorLodge/archives"
+folder = "CastorLodge"
 
 # ------------------------------------------------------------------------------
 # Explicit Backup Targets

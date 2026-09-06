@@ -24,7 +24,7 @@ func RunInitForm(defaultNamespace string) (*InitFormResult, error) {
 	result := &InitFormResult{
 		Namespace:      defaultNamespace,
 		GCSLocation:    "northamerica-northeast1",
-		GDriveFolder:   "CastorLodge/archives",
+		GDriveFolder:   "CastorLodge",
 		LocalPath:      "~/Backups/castor",
 		GenerateAgeKey: true,
 	}
@@ -115,7 +115,7 @@ func RunInitForm(defaultNamespace string) (*InitFormResult, error) {
 			huh.NewInput().
 				Title("Google Drive Folder").
 				Description("Folder in your Google Drive where archives will be stored").
-				Placeholder("CastorLodge/archives").
+				Placeholder("CastorLodge").
 				Value(&result.GDriveFolder).
 				Validate(func(s string) error {
 					if strings.TrimSpace(s) == "" {

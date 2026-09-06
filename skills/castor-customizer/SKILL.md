@@ -49,7 +49,7 @@ prefix = "archives"
 [[destinations]]
 name = "gdrive-personal"
 provider = "gdrive"
-folder = "CastorLodge/archives"
+folder = "CastorLodge"
 
 # Destination 3: Local Filesystem / External NVMe / NAS Mount
 [[destinations]]

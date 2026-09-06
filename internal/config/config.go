@@ -44,7 +44,7 @@ type DestinationConfig struct {
 	Bucket   string `toml:"bucket,omitempty"`
 	Location string `toml:"location,omitempty"`
 	Prefix   string `toml:"prefix,omitempty"`
-	Folder   string `toml:"folder,omitempty"` // For Google Drive e.g. "CastorLodge/archives"
+	Folder   string `toml:"folder,omitempty"` // For Google Drive e.g. "CastorLodge"
 	Path     string `toml:"path,omitempty"`   // For local directory provider e.g. "/mnt/vault"
 }
 
