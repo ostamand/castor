@@ -148,12 +148,15 @@ fi
 # 6. Install LLM Agent Skills into ~/.gemini/config/skills/
 SKILLS_DIR="${HOME}/.gemini/config/skills"
 echo "Installing Castor LLM agent skills to ${SKILLS_DIR}..."
-mkdir -p "${SKILLS_DIR}/castor-cli" "${SKILLS_DIR}/castor-customizer"
+mkdir -p "${SKILLS_DIR}"
 
 if [ -d "${SCRIPT_DIR}/skills/castor-cli" ]; then
-  cp -f "${SCRIPT_DIR}/skills/castor-cli/SKILL.md" "${SKILLS_DIR}/castor-cli/SKILL.md"
-  cp -f "${SCRIPT_DIR}/skills/castor-customizer/SKILL.md" "${SKILLS_DIR}/castor-customizer/SKILL.md"
+  # Local install: symlink skills into agent directory
+  ln -sfn "${SCRIPT_DIR}/skills/castor-cli" "${SKILLS_DIR}/castor-cli"
+  ln -sfn "${SCRIPT_DIR}/skills/castor-customizer" "${SKILLS_DIR}/castor-customizer"
 else
+  # Remote install: download skill files
+  mkdir -p "${SKILLS_DIR}/castor-cli" "${SKILLS_DIR}/castor-customizer"
   curl -fsSL "${RAW_URL}/skills/castor-cli/SKILL.md" -o "${SKILLS_DIR}/castor-cli/SKILL.md" 2>/dev/null || true
   curl -fsSL "${RAW_URL}/skills/castor-customizer/SKILL.md" -o "${SKILLS_DIR}/castor-customizer/SKILL.md" 2>/dev/null || true
 fi
