@@ -2,12 +2,15 @@ package cli
 
 import (
 	"bufio"
+	"context"
 	"fmt"
 	"os"
 	"strings"
+	"time"
 
 	"github.com/atotto/clipboard"
 	"github.com/charmbracelet/lipgloss"
+	"github.com/ostamand/castor/internal/auth"
 	"github.com/ostamand/castor/internal/config"
 	"github.com/ostamand/castor/internal/crypto"
 	"github.com/ostamand/castor/internal/sysinfo"
@@ -155,12 +158,54 @@ func runInit(cmd *cobra.Command, args []string) error {
 	fmt.Println()
 	fmt.Println(lipgloss.NewStyle().Foreground(tui.ColorSuccess).Bold(true).Render("✔ You're all set! Configuration saved to: ") + configPath)
 
+	// Connect Google account if Google storage was selected and not yet authorized
+	hasGoogleDest := false
+	for _, p := range formResult.Providers {
+		if p == "gcs" || p == "gdrive" {
+			hasGoogleDest = true
+			break
+		}
+	}
+
+	if hasGoogleDest && !auth.HasValidCredentials() {
+		fmt.Println()
+		loginNow, _ := tui.ConfirmPrompt(
+			"Connect Google Account",
+			"Castor needs permission to store archives in your Google account. Authenticate via browser now?",
+			true,
+		)
+		if loginNow {
+			fmt.Println("\n🦫 Opening browser to authenticate with Google...")
+			authCtx, authCancel := context.WithTimeout(context.Background(), 3*time.Minute)
+			if _, err := auth.Login(authCtx); err != nil {
+				fmt.Println(lipgloss.NewStyle().Foreground(tui.ColorWarning).Render(
+					fmt.Sprintf("⚠️  Authentication deferred (%v). You can log in later with 'castor auth login'.", err),
+				))
+			} else {
+				fmt.Println(lipgloss.NewStyle().Foreground(tui.ColorSuccess).Bold(true).Render("✔ Successfully authenticated with Google!"))
+			}
+			authCancel()
+		} else {
+			fmt.Println(lipgloss.NewStyle().Foreground(tui.ColorWarning).Render(
+				"⚠️  Remember to run 'castor auth login' before backing up to Google Drive.",
+			))
+		}
+	}
+
 	fmt.Println()
 	fmt.Println(tui.StyleBold.Render("What to do next:"))
-	fmt.Println("  1. Add a folder to back up   : " + lipgloss.NewStyle().Foreground(tui.ColorAccent).Render("castor add ~/projects"))
-	fmt.Println("  2. Preview your backup plan  : " + lipgloss.NewStyle().Foreground(tui.ColorAccent).Render("castor push -n"))
-	fmt.Println("  3. Run your first backup     : " + lipgloss.NewStyle().Foreground(tui.ColorAccent).Render("castor push"))
-	fmt.Println("  4. Turn on automated schedule: " + lipgloss.NewStyle().Foreground(tui.ColorAccent).Render("castor schedule on"))
+	step := 1
+	if hasGoogleDest && !auth.HasValidCredentials() {
+		fmt.Printf("  %d. Authenticate with Google   : %s\n", step, lipgloss.NewStyle().Foreground(tui.ColorAccent).Render("castor auth login"))
+		step++
+	}
+	fmt.Printf("  %d. Add a folder to back up    : %s\n", step, lipgloss.NewStyle().Foreground(tui.ColorAccent).Render("castor add ~/projects"))
+	step++
+	fmt.Printf("  %d. Preview your backup plan   : %s\n", step, lipgloss.NewStyle().Foreground(tui.ColorAccent).Render("castor push -n"))
+	step++
+	fmt.Printf("  %d. Run your first backup      : %s\n", step, lipgloss.NewStyle().Foreground(tui.ColorAccent).Render("castor push"))
+	step++
+	fmt.Printf("  %d. Turn on automated schedule : %s\n", step, lipgloss.NewStyle().Foreground(tui.ColorAccent).Render("castor schedule on"))
 
 	return nil
 }

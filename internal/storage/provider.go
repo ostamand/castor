@@ -4,11 +4,10 @@ import (
 	"context"
 	"fmt"
 	"io"
-	"os"
 	"time"
 
+	"github.com/ostamand/castor/internal/auth"
 	"github.com/ostamand/castor/internal/config"
-	"google.golang.org/api/option"
 )
 
 // ObjectInfo holds remote storage metadata for an object
@@ -34,13 +33,10 @@ type Provider interface {
 func NewProviderFromConfig(ctx context.Context, dest config.DestinationConfig) (Provider, error) {
 	switch dest.Provider {
 	case "gcs":
-		return NewGCSProvider(ctx, dest.Name, dest.Bucket, dest.Prefix)
+		opts, _ := auth.GetGoogleClientOptions(ctx)
+		return NewGCSProvider(ctx, dest.Name, dest.Bucket, dest.Prefix, opts...)
 	case "gdrive":
-		credsPath := config.DefaultCredentialsPath()
-		var opts []option.ClientOption
-		if _, err := os.Stat(credsPath); err == nil {
-			opts = append(opts, option.WithCredentialsFile(credsPath))
-		}
+		opts, _ := auth.GetGoogleClientOptions(ctx)
 		return NewGDriveProvider(ctx, dest.Name, dest.Folder, opts...)
 	case "local", "file", "fs":
 		return NewLocalProvider(dest.Name, dest.Path)
