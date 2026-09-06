@@ -160,3 +160,83 @@ func TestScanDirectoryRecursiveAndBoundaries(t *testing.T) {
 		t.Errorf("git subdirectories or build junk leaked into candidate list: %v", names)
 	}
 }
+
+func TestAddSingleTargetLifecycle(t *testing.T) {
+	tmp := t.TempDir()
+
+	// Initialize config
+	cfgPath = filepath.Join(tmp, "config.toml")
+	defer func() { cfgPath = "" }()
+
+	initCfg := config.DefaultConfig()
+	initCfg.Namespace = "test-box"
+	initCfg.Security.Encrypt = false
+	if err := config.SaveConfig(cfgPath, initCfg); err != nil {
+		t.Fatalf("failed saving test config: %v", err)
+	}
+
+	// 1. Create a Git repository with subfolders
+	gitRepo := filepath.Join(tmp, "awesome-app")
+	_ = os.MkdirAll(filepath.Join(gitRepo, ".git"), 0755)
+	_ = os.MkdirAll(filepath.Join(gitRepo, "cmd"), 0755)
+	_ = os.MkdirAll(filepath.Join(gitRepo, "pkg"), 0755)
+	_ = os.WriteFile(filepath.Join(gitRepo, "main.go"), []byte("package main"), 0644)
+
+	// Add single git target
+	addRecursive = false
+	addScan = false
+	addGitOnly = false
+	addDryRun = false
+	addName = ""
+	addPrefix = ""
+
+	if err := runAdd(nil, []string{gitRepo}); err != nil {
+		t.Fatalf("runAdd on git repo failed: %v", err)
+	}
+
+	cfg, err := config.LoadConfig(cfgPath)
+	if err != nil {
+		t.Fatalf("failed reloading config: %v", err)
+	}
+	if len(cfg.Targets) != 1 {
+		t.Fatalf("expected exactly 1 target, got %d", len(cfg.Targets))
+	}
+	if cfg.Targets[0].Name != "awesome-app" {
+		t.Errorf("expected target name 'awesome-app', got '%s'", cfg.Targets[0].Name)
+	}
+	if cfg.Targets[0].Type != "git" {
+		t.Errorf("expected target type 'git', got '%s'", cfg.Targets[0].Type)
+	}
+	if !cfg.Targets[0].CreateGitBundle {
+		t.Errorf("expected CreateGitBundle to be true for git target")
+	}
+
+	// 2. Add single generic folder with subfolders
+	docDir := filepath.Join(tmp, "my-notes")
+	_ = os.MkdirAll(filepath.Join(docDir, "personal"), 0755)
+	_ = os.MkdirAll(filepath.Join(docDir, "work"), 0755)
+	_ = os.WriteFile(filepath.Join(docDir, "todo.txt"), []byte("todo list"), 0644)
+
+	if err := runAdd(nil, []string{docDir}); err != nil {
+		t.Fatalf("runAdd on generic folder failed: %v", err)
+	}
+
+	cfg, err = config.LoadConfig(cfgPath)
+	if err != nil {
+		t.Fatalf("failed reloading config: %v", err)
+	}
+	if len(cfg.Targets) != 2 {
+		t.Fatalf("expected 2 targets, got %d", len(cfg.Targets))
+	}
+	if cfg.Targets[1].Name != "my-notes" {
+		t.Errorf("expected target name 'my-notes', got '%s'", cfg.Targets[1].Name)
+	}
+	if cfg.Targets[1].Type != "generic" {
+		t.Errorf("expected target type 'generic', got '%s'", cfg.Targets[1].Type)
+	}
+
+	// 3. Re-adding should fail with duplicate conflict
+	if err := runAdd(nil, []string{gitRepo}); err == nil {
+		t.Errorf("expected duplicate target error when re-adding, got nil")
+	}
+}

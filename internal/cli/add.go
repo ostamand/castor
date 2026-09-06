@@ -17,31 +17,39 @@ import (
 
 var (
 	addRecursive bool
+	addScan      bool
 	addGitOnly   bool
 	addMaxDepth  int
 	addPrefix    string
 	addType      string
+	addName      string
 	addYes       bool
 	addDryRun    bool
 )
 
 var addCmd = &cobra.Command{
-	Use:   "add <path>",
-	Short: "Interactively discover and register child folders into config.toml",
-	Long: `Interactively inspects a directory tree, distinguishes Git repositories from generic folders,
-checks for name collisions, and writes explicit target declarations directly into config.toml.`,
+	Use:   "add <path> [flags]",
+	Short: "Add a folder or scan a directory for projects to back up",
+	Long: `Adds a folder directly as a backup target into config.toml.
+
+If the folder contains a .git repository, Castor automatically configures it with full Git fidelity
+(committed history, branch heads, stashes, and working tree).
+
+To discover and register multiple child projects within a parent directory, use -r or --scan.`,
 	Args: cobra.ExactArgs(1),
 	RunE: runAdd,
 }
 
 func init() {
-	addCmd.Flags().BoolVarP(&addRecursive, "recursive", "r", false, "Traverse subdirectories recursively to discover projects")
+	addCmd.Flags().BoolVarP(&addRecursive, "recursive", "r", false, "Scan child directories to discover multiple projects")
+	addCmd.Flags().BoolVar(&addScan, "scan", false, "Scan child directories to discover projects (alias for -r)")
+	addCmd.Flags().StringVar(&addName, "name", "", "Custom name for the registered target (defaults to directory name)")
 	addCmd.Flags().BoolVarP(&addGitOnly, "git-only", "g", false, "Restrict discovery strictly to Git repositories (.git directories)")
-	addCmd.Flags().IntVar(&addMaxDepth, "max-depth", 0, "Maximum directory recursion depth (default: 1 without -r, 4 with -r)")
-	addCmd.Flags().StringVar(&addPrefix, "prefix", "", "Prepend a prefix to discovered target names (e.g. 'work/')")
-	addCmd.Flags().StringVar(&addType, "type", "generic", "Default target type for non-Git directories")
-	addCmd.Flags().BoolVarP(&addYes, "yes", "y", false, "Non-interactive mode: add all valid discovered targets without prompt")
-	addCmd.Flags().BoolVarP(&addDryRun, "dry-run", "n", false, "Print discovered targets without modifying config.toml")
+	addCmd.Flags().IntVar(&addMaxDepth, "max-depth", 0, "Maximum directory recursion depth when scanning (default: 4)")
+	addCmd.Flags().StringVar(&addPrefix, "prefix", "", "Prepend a prefix to target names (e.g. 'work/')")
+	addCmd.Flags().StringVar(&addType, "type", "generic", "Target type for non-Git directories (generic, documents, media)")
+	addCmd.Flags().BoolVarP(&addYes, "yes", "y", false, "Non-interactive mode: add targets without confirmation prompt")
+	addCmd.Flags().BoolVarP(&addDryRun, "dry-run", "n", false, "Preview targets without modifying config.toml")
 }
 
 func runAdd(cmd *cobra.Command, args []string) error {
@@ -67,13 +75,78 @@ func runAdd(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("path '%s' is not a valid directory", absPath)
 	}
 
+	// Check if path itself is a Git repository
+	isGit := false
+	if _, err := os.Stat(filepath.Join(absPath, ".git")); err == nil {
+		isGit = true
+	}
+
+	isScan := addRecursive || addScan
+
+	// Case 1: Adding a single folder directly (default, or when the folder is a Git repository)
+	if !isScan || isGit {
+		targetName := addName
+		if targetName == "" {
+			targetName = addPrefix + filepath.Base(absPath)
+		}
+
+		targetType := addType
+		if isGit {
+			targetType = "git"
+		}
+
+		// Normalize path preserving ~ notation when applicable
+		savedPath := absPath
+		home, _ := os.UserHomeDir()
+		if strings.HasPrefix(rawPath, "~") {
+			savedPath = rawPath
+		} else if home != "" && strings.HasPrefix(absPath, home) {
+			savedPath = "~" + strings.TrimPrefix(absPath, home)
+		}
+
+		// Check for conflicts with existing targets
+		for _, t := range cfg.Targets {
+			if sysinfo.ExpandHome(t.Path) == absPath {
+				return fmt.Errorf("folder '%s' is already registered in %s as target '%s'", rawPath, configPath, t.Name)
+			}
+			if t.Name == targetName {
+				return fmt.Errorf("a target named '%s' is already registered in %s (path: %s)", targetName, configPath, t.Path)
+			}
+		}
+
+		estBytes := estimateDirBytes(absPath)
+
+		if addDryRun {
+			fmt.Printf("[DRY-RUN] Target to add:\n")
+			fmt.Printf("  • %-24s (%s · %s) -> %s\n", targetName, targetType, tui.FormatBytes(estBytes), savedPath)
+			return nil
+		}
+
+		target := tui.DiscoveredTarget{
+			Name:           targetName,
+			Path:           savedPath,
+			Type:           targetType,
+			EstimatedBytes: estBytes,
+		}
+
+		if err := AppendTargetsToConfig(configPath, []tui.DiscoveredTarget{target}); err != nil {
+			return fmt.Errorf("failed to update config file: %w", err)
+		}
+
+		fmt.Println(lipgloss.NewStyle().Foreground(tui.ColorSuccess).Bold(true).Render(
+			fmt.Sprintf("✔ Added target '%s' (%s) -> %s", targetName, targetType, savedPath),
+		))
+		fmt.Println()
+		fmt.Println(tui.StyleBold.Render("What to do next:"))
+		fmt.Println("  • Preview your backup: " + lipgloss.NewStyle().Foreground(tui.ColorAccent).Render("castor push -n"))
+		fmt.Println("  • Run your backup    : " + lipgloss.NewStyle().Foreground(tui.ColorAccent).Render("castor push"))
+		return nil
+	}
+
+	// Case 2: Scanning a parent directory to discover child projects (-r or --scan)
 	depth := addMaxDepth
 	if depth <= 0 {
-		if addRecursive {
-			depth = 4
-		} else {
-			depth = 1
-		}
+		depth = 4
 	}
 
 	fmt.Printf("🦫 Castor · Scanning '%s' (namespace: %s, max-depth: %d)...\n", rawPath, cfg.Namespace, depth)

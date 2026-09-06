@@ -104,17 +104,18 @@ Guided onboarding wizard to configure namespace, cloud providers, and Age encryp
   * `--config, -c <path>`: Path to config file (default: `~/.config/castor/config.toml`).
 
 ### `castor add <path> [flags]`
-Interactively discovers and registers child folders into `config.toml`.
+Adds a folder directly as a backup target, or scans a parent directory for projects.
 * **Positional Arguments:**
-  * `<path>` *(required, string)*: Parent directory to scan.
+  * `<path>` *(required, string)*: Directory path to add or scan.
 * **Flags:**
-  * `-r, --recursive` *(optional, bool)*: Traverse subdirectories recursively.
-  * `-g, --git-only` *(optional, bool)*: Restrict discovery strictly to Git repositories.
-  * `--max-depth <int>` *(optional, int)*: Maximum recursion depth (default: 1 without `-r`, 4 with `-r`).
-  * `--prefix <string>` *(optional, string)*: Prepend a prefix to discovered target names.
-  * `--type <string>` *(optional, string)*: Default type for non-Git directories (`generic`, `documents`, `media`).
-  * `-y, --yes` *(optional, bool)*: Non-interactive mode; add all valid candidates without prompting.
-  * `-n, --dry-run` *(optional, bool)*: Print discovered candidates without modifying `config.toml`.
+  * `--name <string>` *(optional, string)*: Custom name for the registered target (defaults to directory name).
+  * `-r, --recursive`, `--scan` *(optional, bool)*: Scan child directories to discover multiple projects.
+  * `-g, --git-only` *(optional, bool)*: Restrict discovery scan strictly to Git repositories.
+  * `--max-depth <int>` *(optional, int)*: Maximum directory recursion depth when scanning (default: 4).
+  * `--prefix <string>` *(optional, string)*: Prepend a prefix to target names (e.g. `work/`).
+  * `--type <string>` *(optional, string)*: Target type for non-Git directories (`generic`, `documents`, `media`).
+  * `-y, --yes` *(optional, bool)*: Non-interactive mode; add targets without confirmation prompt.
+  * `-n, --dry-run` *(optional, bool)*: Preview targets without modifying `config.toml`.
 
 ### `castor push [target] [flags]`
 Streams changed targets directly to all active cloud destinations.
