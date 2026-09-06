@@ -1,6 +1,7 @@
 BINARY_NAME := castor
 CMD_PATH := ./cmd/castor
-INSTALL_PATH := /usr/local/bin
+PREFIX ?= $(shell if [ -w /usr/local/bin ]; then echo /usr/local; else echo $(HOME)/.local; fi)
+INSTALL_PATH ?= $(PREFIX)/bin
 
 SKILLS_SRC := $(CURDIR)/skills
 SKILLS_DEST := $(HOME)/.gemini/config/skills
@@ -40,13 +41,17 @@ uninstall-skills:
 	done
 
 install: build install-skills
+	@mkdir -p $(INSTALL_PATH)
 	install -m 755 bin/$(BINARY_NAME) $(INSTALL_PATH)/$(BINARY_NAME)
+	@echo "✔ Castor installed to $(INSTALL_PATH)/$(BINARY_NAME)"
 
 uninstall: uninstall-skills
 	@systemctl --user disable --now castor.timer 2>/dev/null || true
 	@rm -f $(HOME)/.config/systemd/user/castor.service $(HOME)/.config/systemd/user/castor.timer
 	@systemctl --user daemon-reload 2>/dev/null || true
 	@rm -f $(INSTALL_PATH)/$(BINARY_NAME)
+	@rm -f $(HOME)/.local/bin/$(BINARY_NAME)
+	@if [ -w /usr/local/bin ]; then rm -f /usr/local/bin/$(BINARY_NAME); fi
 	@echo "✔ Castor binary, systemd timer, and skills uninstalled."
 
 uninstall-all: uninstall
