@@ -52,16 +52,16 @@ func RunInitForm(defaultNamespace string) (*InitFormResult, error) {
 
 			huh.NewMultiSelect[string]().
 				Title("Storage Destinations").
-				Description("Where would you like to store your archives?").
+				Description("Press [Space] to select one or more destinations to store your archives:").
 				Options(
-					huh.NewOption("Google Cloud Storage (GCS) — Fast, low-cost long-term cloud storage", "gcs").Selected(true),
-					huh.NewOption("Google Drive — Back up directly to your personal or Workspace Drive", "gdrive").Selected(true),
+					huh.NewOption("Google Cloud Storage (GCS) — Fast, low-cost long-term cloud storage", "gcs"),
+					huh.NewOption("Google Drive — Back up directly to your personal or Workspace Drive", "gdrive"),
 					huh.NewOption("Local or External Drive / NAS — Back up to a local directory, USB drive, or NAS", "local"),
 				).
 				Value(&result.Providers).
 				Validate(func(v []string) error {
 					if len(v) == 0 {
-						return fmt.Errorf("please select at least one storage provider")
+						return fmt.Errorf("please select at least one storage destination with [Space]")
 					}
 					return nil
 				}),
