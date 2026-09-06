@@ -91,12 +91,12 @@ func CompareTargetWithRemote(
 	if !localExists && diff.RemoteMeta != nil {
 		diff.Status = StatusLocalMissing
 		diff.RemoteBytes = diff.RemoteMeta.Payload.UncompressedBytes
-		diff.Summary = "Target path does not exist locally (available in vault for pull)."
+		diff.Summary = "Target path does not exist locally (available in cloud to restore)."
 		return diff, nil
 	}
 	if localExists && diff.RemoteMeta == nil {
 		diff.Status = StatusRemoteMissing
-		diff.Summary = "Never pushed to cloud vault."
+		diff.Summary = "Never backed up to cloud."
 		return diff, nil
 	}
 

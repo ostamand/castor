@@ -25,11 +25,11 @@ var (
 var diffCmd = &cobra.Command{
 	Use:     "diff [target]",
 	Aliases: []string{"compare"},
-	Short:   "Compare active local workspace against remote vault manifest",
-	Long: `Fetches and decrypts the lightweight sidecar metadata manifest (~500 bytes) from cloud storage
-and compares it with your active local workspace without downloading or extracting the archive.
+	Short:   "Compare local projects against your cloud archives",
+	Long: `Checks your cloud storage and compares it with your local working projects
+in milliseconds without downloading or extracting full archives.
 
-Reports commit distance, branch synchronization, uncommitted/untracked file drift, and stashes.`,
+Shows commit distance, branch status, and uncommitted edits.`,
 	RunE: runDiff,
 }
 
@@ -174,9 +174,9 @@ func renderDiffCard(d *engine.TargetDiff, destName string) {
 	case engine.StatusDiverged:
 		statusBadge = lipgloss.NewStyle().Bold(true).Foreground(tui.ColorDanger).Render("✖ DIVERGED")
 	case engine.StatusRemoteMissing:
-		statusBadge = lipgloss.NewStyle().Bold(true).Foreground(tui.ColorWarning).Render("? NOT IN VAULT")
+		statusBadge = lipgloss.NewStyle().Bold(true).Foreground(tui.ColorWarning).Render("? NOT IN CLOUD")
 	case engine.StatusLocalMissing:
-		statusBadge = lipgloss.NewStyle().Bold(true).Foreground(tui.ColorPrimary).Render("☁ IN VAULT ONLY")
+		statusBadge = lipgloss.NewStyle().Bold(true).Foreground(tui.ColorPrimary).Render("☁ CLOUD ONLY")
 	}
 
 	title := fmt.Sprintf("%s · %s", lipgloss.NewStyle().Bold(true).Render(d.TargetName), statusBadge)
@@ -199,7 +199,7 @@ func renderDiffCard(d *engine.TargetDiff, destName string) {
 		if d.CommitsAhead > 0 || d.CommitsBehind > 0 {
 			lines = append(lines, fmt.Sprintf("  Distance      : +%d ahead / -%d behind", d.CommitsAhead, d.CommitsBehind))
 		}
-		lines = append(lines, fmt.Sprintf("  Working Tree  : %d uncommitted file(s) (Local) vs %d (Vault)",
+		lines = append(lines, fmt.Sprintf("  Working Tree  : %d uncommitted file(s) (Local) vs %d (Cloud)",
 			d.LocalUncommittedCount, d.RemoteUncommittedCount))
 		if d.LocalStashes > 0 || d.RemoteStashes {
 			lines = append(lines, fmt.Sprintf("  Stashes       : %d local stash(es)", d.LocalStashes))

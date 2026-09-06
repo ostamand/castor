@@ -19,13 +19,12 @@ const version = "0.4.0"
 // RootCmd is the primary CLI command for Castor
 var RootCmd = &cobra.Command{
 	Use:   "castor",
-	Short: "🦫 Castor — Developer cold-storage vault & multi-cloud streaming archiver",
+	Short: "🦫 Castor — Fast, encrypted cloud archiving for developers",
 	Long: `🦫 Castor (Castor canadensis)
-Nature's engineer, lodge builder, and cold-storage architect.
+Nature's engineer and lodge builder.
 
-Castor is an intentional, developer-first archiver that captures, packages,
-encrypts, and streams explicit project workspaces directly to cloud object storage
-without local staging or continuous background resource overhead.`,
+Castor protects your code and project workspaces by compressing, encrypting,
+and streaming them directly into cloud storage — keeping your work safe without slowing you down.`,
 	Version: version,
 }
 

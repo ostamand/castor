@@ -27,7 +27,7 @@ var uninstallCmd = &cobra.Command{
 and removes the Castor binary from your system.
 
 By default, your configuration directory (~/.config/castor) and Age encryption keys are PRESERVED
-to protect against accidental loss of vault access. Use --purge to remove them.`,
+so you never accidentally lose access to restore your archives. Use --purge to remove them.`,
 	RunE: runUninstall,
 }
 

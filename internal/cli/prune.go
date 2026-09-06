@@ -116,7 +116,7 @@ func runPrune(cmd *cobra.Command, args []string) error {
 	}
 
 	if len(orphans) == 0 {
-		fmt.Println("✔ No orphaned archives found in cloud vault. Everything is clean!")
+		fmt.Println("✔ No orphaned archives found in cloud storage. Everything is clean!")
 		return nil
 	}
 

@@ -37,7 +37,7 @@ If the target is a Git repository, committed history, stashes, and working tree 
 }
 
 func init() {
-	pullCmd.Flags().StringVarP(&pullNamespace, "namespace", "s", "", "Namespace to restore from (default: current vault namespace)")
+	pullCmd.Flags().StringVarP(&pullNamespace, "namespace", "s", "", "Namespace to restore from (default: current namespace)")
 	pullCmd.Flags().StringVar(&pullToDir, "to", "", "Restore into a custom destination directory instead of original path")
 	pullCmd.Flags().BoolVarP(&pullForce, "force", "f", false, "Overwrite existing destination files without prompt")
 	pullCmd.Flags().StringVar(&pullDest, "dest", "", "Specific destination provider to pull from (e.g. 'gcp-coldline')")
@@ -115,7 +115,7 @@ func runPull(cmd *cobra.Command, args []string) error {
 		}
 
 		if len(items) == 0 {
-			fmt.Println("No archives found in remote vault.")
+			fmt.Println("No archives found in cloud storage.")
 			return nil
 		}
 

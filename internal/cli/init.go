@@ -37,8 +37,8 @@ func runInit(cmd *cobra.Command, args []string) error {
 		}
 	}
 
-	host := sysinfo.GetHostInfo()
-	formResult, err := tui.RunInitForm(host.DefaultNamespace)
+	defaultNS := "workstation"
+	formResult, err := tui.RunInitForm(defaultNS)
 	if err != nil {
 		return err
 	}
@@ -51,7 +51,7 @@ func runInit(cmd *cobra.Command, args []string) error {
 		switch p {
 		case "gcs":
 			cfg.Destinations = append(cfg.Destinations, config.DestinationConfig{
-				Name:     "gcp-coldline",
+				Name:     "google-cloud-storage",
 				Provider: "gcs",
 				Bucket:   formResult.GCSBucket,
 				Location: formResult.GCSLocation,
@@ -59,7 +59,7 @@ func runInit(cmd *cobra.Command, args []string) error {
 			})
 		case "gdrive":
 			cfg.Destinations = append(cfg.Destinations, config.DestinationConfig{
-				Name:     "gdrive-mirror",
+				Name:     "google-drive",
 				Provider: "gdrive",
 				Folder:   formResult.GDriveFolder,
 			})
@@ -88,22 +88,21 @@ func runInit(cmd *cobra.Command, args []string) error {
 
 	// Success feedback
 	fmt.Println()
-	fmt.Println(lipgloss.NewStyle().Foreground(tui.ColorSuccess).Bold(true).Render("✔ Setup complete! Configuration written to: ") + configPath)
+	fmt.Println(lipgloss.NewStyle().Foreground(tui.ColorSuccess).Bold(true).Render("✔ You're all set! Configuration saved to: ") + configPath)
 
 	if secretKey != "" {
-		alertContent := fmt.Sprintf(`Public Recipient Key:
-  %s
+		alertContent := fmt.Sprintf(`🔐 Save Your Encryption Key
 
-Secret Private Key:
-  %s
+Public Key : %s
+Secret Key : %s
 
-⚠️  CRITICAL: Store this secret key in 1Password, Bitwarden, or print it.
-This private key is NOT retained on this computer for write-only host security!`,
+⚠️  IMPORTANT: Save this secret key in your password manager (1Password, Bitwarden, Keychain).
+Because Castor uses true end-to-end encryption, this key is the only way to restore your archives if this device is ever lost or replaced.`,
 			cfg.Security.AgePublicKeys[0], secretKey)
 
 		alertBox := lipgloss.NewStyle().
-			Border(lipgloss.DoubleBorder()).
-			BorderForeground(tui.ColorDanger).
+			Border(lipgloss.RoundedBorder()).
+			BorderForeground(tui.ColorAccent).
 			Padding(1, 2).
 			Render(alertContent)
 
@@ -112,10 +111,11 @@ This private key is NOT retained on this computer for write-only host security!`
 	}
 
 	fmt.Println()
-	fmt.Println(tui.StyleBold.Render("Next steps:"))
-	fmt.Println("  1. Discover & add projects:  " + lipgloss.NewStyle().Foreground(tui.ColorAccent).Render("castor add ~/projects -r --git-only"))
-	fmt.Println("  2. Test execution plan:      " + lipgloss.NewStyle().Foreground(tui.ColorAccent).Render("castor push -n"))
-	fmt.Println("  3. Stream first backup:      " + lipgloss.NewStyle().Foreground(tui.ColorAccent).Render("castor push"))
+	fmt.Println(tui.StyleBold.Render("What to do next:"))
+	fmt.Println("  1. Add projects to back up   : " + lipgloss.NewStyle().Foreground(tui.ColorAccent).Render("castor add ~/projects -r --git-only"))
+	fmt.Println("  2. Preview your backup plan  : " + lipgloss.NewStyle().Foreground(tui.ColorAccent).Render("castor push -n"))
+	fmt.Println("  3. Run your first backup     : " + lipgloss.NewStyle().Foreground(tui.ColorAccent).Render("castor push"))
+	fmt.Println("  4. Turn on automated schedule: " + lipgloss.NewStyle().Foreground(tui.ColorAccent).Render("castor schedule on"))
 
 	return nil
 }

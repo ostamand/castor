@@ -33,8 +33,9 @@ func RunInitForm(defaultNamespace string) (*InitFormResult, error) {
 	form1 := huh.NewForm(
 		huh.NewGroup(
 			huh.NewInput().
-				Title("Vault Namespace").
-				Description("Unique identifier for this device or profile (used as cloud partition)").
+				Title("Namespace").
+				Description("A label to group and organize your archives (e.g. personal, work, lab)").
+				Placeholder("workstation").
 				Value(&result.Namespace).
 				Validate(func(s string) error {
 					s = strings.TrimSpace(s)
@@ -49,11 +50,11 @@ func RunInitForm(defaultNamespace string) (*InitFormResult, error) {
 
 			huh.NewMultiSelect[string]().
 				Title("Storage Destinations").
-				Description("Choose which cloud backends to configure").
+				Description("Where would you like to store your archives?").
 				Options(
-					huh.NewOption("Google Cloud Storage (GCS) - Ideal for Nearline/Coldline lifecycle rules", "gcs").Selected(true),
-					huh.NewOption("Google Drive - Uses personal Google One / Workspace quota", "gdrive").Selected(true),
-					huh.NewOption("Amazon S3 - S3 Standard / Glacier Instant Retrieval", "s3"),
+					huh.NewOption("Google Cloud Storage (GCS) — Fast, low-cost long-term cloud storage", "gcs").Selected(true),
+					huh.NewOption("Google Drive — Back up directly to your personal or Workspace Drive", "gdrive").Selected(true),
+					huh.NewOption("Amazon S3 & S3-Compatible — AWS, Cloudflare R2, MinIO, or Backblaze", "s3"),
 				).
 				Value(&result.Providers).
 				Validate(func(v []string) error {
@@ -86,9 +87,9 @@ func RunInitForm(defaultNamespace string) (*InitFormResult, error) {
 	if hasGCS {
 		groups = append(groups, huh.NewGroup(
 			huh.NewInput().
-				Title("GCS Bucket Name").
-				Description("Google Cloud Storage bucket for your cold archives").
-				Placeholder("e.g. castor-vault-montreal").
+				Title("Google Cloud Storage Bucket").
+				Description("Enter your bucket name (e.g. my-castor-backups)").
+				Placeholder("my-castor-backups").
 				Value(&result.GCSBucket).
 				Validate(func(s string) error {
 					if strings.TrimSpace(s) == "" {
@@ -97,8 +98,8 @@ func RunInitForm(defaultNamespace string) (*InitFormResult, error) {
 					return nil
 				}),
 			huh.NewInput().
-				Title("GCS Bucket Location").
-				Description("GCP region (e.g. northamerica-northeast1, us-central1)").
+				Title("Storage Region").
+				Description("Closest region for fast uploads (e.g. us-central1, northamerica-northeast1)").
 				Value(&result.GCSLocation),
 		))
 	}
@@ -106,8 +107,9 @@ func RunInitForm(defaultNamespace string) (*InitFormResult, error) {
 	if hasGDrive {
 		groups = append(groups, huh.NewGroup(
 			huh.NewInput().
-				Title("Google Drive Destination Folder").
-				Description("Folder hierarchy in Google Drive root").
+				Title("Google Drive Folder").
+				Description("Folder in your Google Drive where archives will be stored").
+				Placeholder("CastorLodge/archives").
 				Value(&result.GDriveFolder).
 				Validate(func(s string) error {
 					if strings.TrimSpace(s) == "" {
@@ -121,11 +123,11 @@ func RunInitForm(defaultNamespace string) (*InitFormResult, error) {
 	keyChoice := "generate"
 	groups = append(groups, huh.NewGroup(
 		huh.NewSelect[string]().
-			Title("Age Asymmetric Encryption").
-			Description("Encrypt archives in-memory before sending to cloud").
+			Title("End-to-End Encryption").
+			Description("Protect your archives so only you can unlock and read them").
 			Options(
-				huh.NewOption("Generate new write-only Age keypair (Recommended)", "generate"),
-				huh.NewOption("Provide an existing Age public key (age1...)", "existing"),
+				huh.NewOption("Create a new secure encryption key for me (Recommended)", "generate"),
+				huh.NewOption("I already have an Age public key (age1...)", "existing"),
 			).
 			Value(&keyChoice),
 	))
@@ -175,12 +177,12 @@ func ConfirmPrompt(title string, description string, defaultVal bool) (bool, err
 func ConflictResolutionPrompt(targetName, conflictDetail string) (int, error) {
 	var choice int
 	err := huh.NewSelect[int]().
-		Title(fmt.Sprintf("Conflict detected for '%s'", targetName)).
+		Title(fmt.Sprintf("Archive already exists for '%s'", targetName)).
 		Description(conflictDetail).
 		Options(
-			huh.NewOption("1. Namespace / Rename target", 1),
-			huh.NewOption("2. Adopt & Overwrite (claim remote archive as latest)", 2),
-			huh.NewOption("3. Abort operation", 3),
+			huh.NewOption("1. Rename target or use a different namespace", 1),
+			huh.NewOption("2. Overwrite existing cloud archive with latest version", 2),
+			huh.NewOption("3. Cancel", 3),
 		).
 		Value(&choice).
 		WithTheme(huh.ThemeCharm()).

@@ -25,7 +25,7 @@ cat << 'EOF'
   \____\__,_|___/\__\___/|_|   
 EOF
 echo "${RESET}"
-echo "${BOLD}🦫 Installing Castor — Developer Cold-Storage Vault & Archiver...${RESET}"
+echo "${BOLD}🦫 Installing Castor — Fast, Encrypted Cloud Archiving for Developers...${RESET}"
 echo
 
 # 1. Detect OS and Architecture

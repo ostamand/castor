@@ -26,10 +26,10 @@ var (
 
 var pushCmd = &cobra.Command{
 	Use:     "push [target]",
-	Aliases: []string{"lodge"},
-	Short:   "Stream changed targets to configured cloud destinations",
-	Long: `Captures, packages, encrypts, and streams explicit target workspaces directly
-to all active cloud destinations under your vault namespace.`,
+	Aliases: []string{"backup"},
+	Short:   "Back up changed projects to your cloud storage",
+	Long: `Packages, encrypts, and streams your project workspaces directly
+to your configured cloud storage destinations.`,
 	RunE: runPush,
 }
 

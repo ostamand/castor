@@ -20,15 +20,15 @@ var (
 
 var lsCmd = &cobra.Command{
 	Use:     "ls",
-	Aliases: []string{"cache"},
-	Short:   "List remote cloud archives, byte sizes, and timestamps",
-	Long:    "Inspects remote vault destinations and displays all backed-up archives, sizes, and tiers.",
+	Aliases: []string{"list"},
+	Short:   "List cloud archives, sizes, and backup dates",
+	Long:    "Displays all backed-up project archives across your cloud destinations.",
 	RunE:    runLs,
 }
 
 func init() {
 	lsCmd.Flags().StringVarP(&lsNamespace, "namespace", "s", "", "List archives for a specific namespace")
-	lsCmd.Flags().BoolVar(&lsAllNamespaces, "all-namespaces", false, "List archives across all namespaces in the vault")
+	lsCmd.Flags().BoolVar(&lsAllNamespaces, "all-namespaces", false, "List archives across all namespaces")
 	lsCmd.Flags().StringVar(&lsDest, "dest", "", "Filter to a specific storage destination")
 	lsCmd.Flags().BoolVarP(&lsInteractive, "interactive", "i", false, "Open an interactive archive browser")
 }

@@ -1,20 +1,20 @@
 # Castor 🦫
 
-> Nature's engineer, lodge builder, and cold-storage vault architect.
+> Nature's engineer and lodge builder.
 
-**Castor** is an intentional, developer-first cold-storage vault and multi-cloud streaming archiver written in Go. It captures, packages, encrypts, and streams explicit project workspaces directly into cost-effective cloud object storage without local staging or continuous background resource overhead.
+**Castor** is a fast, developer-first cloud archiver and backup tool written in Go. It packages, encrypts, and streams your project workspaces directly into cloud storage (Google Cloud Storage, Google Drive, Local NAS/Drives) without staging intermediate files on disk or running heavy background agents.
 
 ---
 
 ## Key Features
 
-* **Per-Namespace Partitioning:** Organizes archives by top-level namespace (e.g. `workstation`, `laptop`, `work`). Multiple machines safely share the same GCS bucket or Google Drive folder with **zero risk of collision**.
+* **Per-Namespace Organization:** Organizes archives by friendly namespace (e.g. `workstation`, `laptop`, `work`). Multiple machines safely share the same storage bucket or Google Drive folder with **zero risk of collision**.
 * **Zero-Disk Streaming:** Streams `tar -> zstd -> age.Encrypt` in-memory directly to cloud HTTP/2 writers via `io.MultiWriter`. No multi-gigabyte scratch archives staged on your SSD.
-* **Write-Only Host Security:** Asymmetric `age` encryption (`age1...` public key stored on host; private key stays offline). Past backups cannot be decrypted if the workstation is compromised.
+* **End-to-End Encryption:** Industry-standard Age encryption (`age1...` public key stored on device; private key kept safe in your password manager). Past backups cannot be decrypted even if your laptop is lost or compromised.
 * **100% Git Preservation:** Captures full committed history (`.castor/repo.bundle` including `refs/stash`) + active working tree uncommitted edits in a single unified container archive.
 * **First-Class Storage Backends:**
   * **Google Cloud Storage (GCS):** Automatic Nearline/Coldline/Archive lifecycle management ($0.004/GB/mo).
-  * **Google Drive:** Zero-knowledge streaming directly to a designated folder via Google Drive REST API v3 using personal Google One / Workspace quota.
+  * **Google Drive:** Back up directly to a designated folder via Google Drive API using personal Google One / Workspace quota.
   * **Local Filesystem / NAS / External Drive:** Stream directly to local mount points, external backup drives, or local NAS (`provider = "local"`).
 * **Interactive Terminal UI:** Built with the Charm ecosystem (`bubbletea`, `huh`, `lipgloss`, `bubbles`) featuring split-pane checklists, live streaming progress bars, and fuzzy-search archive explorers (with automatic non-TTY fallback for systemd/cron).
 * **Defensive Live Archiving:** Bounded file reads (`copyWithBound`) prevent stream crashes when working on live projects with active background compilers or shifting files.
@@ -45,10 +45,10 @@ castor upgrade
 ### Uninstallation
 ```bash
 # Clean binary, systemd user timer, and skills:
-make uninstall
+castor uninstall
 
 # Or completely purge including config & local state (~/.config/castor):
-make uninstall-all
+castor uninstall --purge
 ```
 
 ---
@@ -56,7 +56,7 @@ make uninstall-all
 ## Quick Start
 
 ### 1. Guided Setup Wizard
-Run the interactive onboarding wizard to configure your namespace, cloud backends, and Age keys:
+Run the interactive onboarding wizard to configure your namespace, cloud backends, and encryption keys:
 ```bash
 castor init
 ```
@@ -73,7 +73,7 @@ Inspect what changed and what will be streamed to the cloud:
 castor push -n
 ```
 
-### 4. Push to Cloud Vault
+### 4. Back Up to Cloud Storage
 Stream changed targets to all configured cloud destinations:
 ```bash
 castor push
