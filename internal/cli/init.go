@@ -1,9 +1,12 @@
 package cli
 
 import (
+	"bufio"
 	"fmt"
 	"os"
+	"strings"
 
+	"github.com/atotto/clipboard"
 	"github.com/charmbracelet/lipgloss"
 	"github.com/ostamand/castor/internal/config"
 	"github.com/ostamand/castor/internal/crypto"
@@ -92,29 +95,65 @@ func runInit(cmd *cobra.Command, args []string) error {
 	// Generate systemd user unit templates on Linux
 	_ = sysinfo.GenerateSystemdUnits("")
 
-	// Success feedback
-	fmt.Println()
-	fmt.Println(lipgloss.NewStyle().Foreground(tui.ColorSuccess).Bold(true).Render("✔ You're all set! Configuration saved to: ") + configPath)
-
 	if secretKey != "" {
-		alertContent := fmt.Sprintf(`🔐 Save Your Encryption Key
+		copiedToClipboard := clipboard.WriteAll(secretKey) == nil
 
-Public Key : %s
-Secret Key : %s
+		var b strings.Builder
+		titleStyle := lipgloss.NewStyle().Bold(true).Foreground(tui.ColorWarning)
+		labelStyle := lipgloss.NewStyle().Bold(true).Foreground(tui.ColorMuted)
+		valStyle := lipgloss.NewStyle().Foreground(tui.ColorHighlight)
+		secretStyle := lipgloss.NewStyle().Bold(true).Foreground(tui.ColorAccent)
+		warnStyle := lipgloss.NewStyle().Bold(true).Foreground(tui.ColorDanger)
 
-⚠️  IMPORTANT: Save this secret key in your password manager (1Password, Bitwarden, Keychain).
-Because Castor uses true end-to-end encryption, this key is the only way to restore your archives if this device is ever lost or replaced.`,
-			cfg.Security.AgePublicKeys[0], secretKey)
+		b.WriteString(titleStyle.Render("🔐 ACTION REQUIRED: Save Your Secret Encryption Key") + "\n\n")
+
+		b.WriteString(labelStyle.Render("Public Key (saved automatically in config.toml):") + "\n")
+		b.WriteString("  " + valStyle.Render(cfg.Security.AgePublicKeys[0]) + "\n\n")
+
+		b.WriteString(secretStyle.Render("Secret Key (CONFIDENTIAL — REQUIRED TO RESTORE BACKUPS):") + "\n")
+		b.WriteString("  " + secretStyle.Render(secretKey) + "\n")
+		if copiedToClipboard {
+			b.WriteString("  " + lipgloss.NewStyle().Foreground(tui.ColorSuccess).Italic(true).Render("📋 Automatically copied to your clipboard!") + "\n")
+		}
+		b.WriteString("\n")
+
+		b.WriteString(tui.StyleBold.Render("👉 What to do right now:") + "\n")
+		b.WriteString("  1. Copy the Secret Key above (or paste from clipboard).\n")
+		b.WriteString("  2. Save it securely in your password manager (1Password, Bitwarden, Apple Keychain).\n")
+		b.WriteString("  3. Keep it safe — you will need it whenever restoring files on any device.\n\n")
+
+		b.WriteString(warnStyle.Render("⚠️  Castor NEVER saves your Secret Key to disk.") + "\n")
+		b.WriteString("Because Castor uses true zero-knowledge end-to-end encryption,\n")
+		b.WriteString("if you lose this key, your backups CANNOT be recovered under any circumstances.")
 
 		alertBox := lipgloss.NewStyle().
 			Border(lipgloss.RoundedBorder()).
-			BorderForeground(tui.ColorAccent).
+			BorderForeground(tui.ColorWarning).
 			Padding(1, 2).
-			Render(alertContent)
+			Render(b.String())
 
 		fmt.Println()
 		fmt.Println(alertBox)
+		fmt.Println()
+
+		reader := bufio.NewReader(os.Stdin)
+		for {
+			confirmed, err := tui.ConfirmSecretKeySavedPrompt()
+			if err != nil {
+				// User cancelled prompt (Ctrl+C / Esc)
+				break
+			}
+			if confirmed {
+				break
+			}
+			fmt.Println(lipgloss.NewStyle().Foreground(tui.ColorWarning).Render("\n⏳ Please copy and save your Secret Key now. Press [Enter] when ready to confirm..."))
+			_, _ = reader.ReadString('\n')
+		}
 	}
+
+	// Success feedback
+	fmt.Println()
+	fmt.Println(lipgloss.NewStyle().Foreground(tui.ColorSuccess).Bold(true).Render("✔ You're all set! Configuration saved to: ") + configPath)
 
 	fmt.Println()
 	fmt.Println(tui.StyleBold.Render("What to do next:"))

@@ -195,6 +195,20 @@ func ConfirmPrompt(title string, description string, defaultVal bool) (bool, err
 	return confirmed, err
 }
 
+// ConfirmSecretKeySavedPrompt asks the user to confirm they have securely stored their secret key
+func ConfirmSecretKeySavedPrompt() (bool, error) {
+	var confirmed bool = false
+	err := huh.NewConfirm().
+		Title("Have you safely stored your Secret Key?").
+		Description("Castor never saves this key to disk. You will need it to restore archives:").
+		Affirmative("Yes, I've saved it").
+		Negative("Wait, let me copy it").
+		Value(&confirmed).
+		WithTheme(huh.ThemeCharm()).
+		Run()
+	return confirmed, err
+}
+
 // ConflictResolutionPrompt presents options for handling remote/local name collision
 func ConflictResolutionPrompt(targetName, conflictDetail string) (int, error) {
 	var choice int
