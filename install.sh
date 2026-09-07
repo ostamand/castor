@@ -90,7 +90,7 @@ TARGET_BIN="${TMP_DIR}/${BINARY_NAME}"
 DOWNLOADED=false
 
 # 3. Check if running inside local castor repository
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" 2>/dev/null && pwd || pwd)"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]:-.}")" 2>/dev/null && pwd || pwd)"
 if [ -f "${SCRIPT_DIR}/go.mod" ] && grep -q "github.com/${REPO}" "${SCRIPT_DIR}/go.mod" 2>/dev/null; then
   if command -v make >/dev/null 2>&1; then
     echo "Detected local Castor repository at ${SCRIPT_DIR}."
