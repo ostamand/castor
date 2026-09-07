@@ -67,6 +67,13 @@ func HasValidCredentials() bool {
 	return token.AccessToken != "" || token.RefreshToken != ""
 }
 
+// StoredCredentials holds OAuth tokens and optional client credentials on disk
+type StoredCredentials struct {
+	oauth2.Token
+	ClientID     string `json:"client_id,omitempty"`
+	ClientSecret string `json:"client_secret,omitempty"`
+}
+
 // GetGoogleClientOptions returns ClientOptions using stored OAuth token if present
 func GetGoogleClientOptions(ctx context.Context) ([]option.ClientOption, error) {
 	credsPath := config.DefaultCredentialsPath()
@@ -75,25 +82,57 @@ func GetGoogleClientOptions(ctx context.Context) ([]option.ClientOption, error) 
 		return nil, nil
 	}
 
-	var token oauth2.Token
-	if err := json.Unmarshal(data, &token); err != nil {
+	var creds StoredCredentials
+	if err := json.Unmarshal(data, &creds); err != nil {
 		return nil, fmt.Errorf("corrupt credentials file: %w", err)
 	}
 
-	tokenSource := OAuthConfig.TokenSource(ctx, &token)
+	conf := *OAuthConfig
+	if conf.ClientID == "" && creds.ClientID != "" {
+		conf.ClientID = creds.ClientID
+	}
+	if conf.ClientSecret == "" && creds.ClientSecret != "" {
+		conf.ClientSecret = creds.ClientSecret
+	}
+
+	tokenSource := conf.TokenSource(ctx, &creds.Token)
 	return []option.ClientOption{option.WithTokenSource(tokenSource)}, nil
 }
 
-// SaveToken persists an OAuth token to ~/.config/castor/credentials.json with mode 0600
-func SaveToken(path string, token *oauth2.Token) error {
+// SaveCredentials persists an OAuth token and client credentials to ~/.config/castor/credentials.json
+func SaveCredentials(path string, token *oauth2.Token, clientID, clientSecret string) error {
 	if err := os.MkdirAll(filepath.Dir(path), 0755); err != nil {
 		return err
 	}
-	data, err := json.MarshalIndent(token, "", "  ")
+	creds := StoredCredentials{
+		Token:        *token,
+		ClientID:     clientID,
+		ClientSecret: clientSecret,
+	}
+	data, err := json.MarshalIndent(creds, "", "  ")
 	if err != nil {
 		return err
 	}
 	return os.WriteFile(path, data, 0600)
+}
+
+// SaveToken persists an OAuth token to ~/.config/castor/credentials.json with mode 0600
+func SaveToken(path string, token *oauth2.Token) error {
+	var clientID, clientSecret string
+	if existing, err := os.ReadFile(path); err == nil {
+		var old StoredCredentials
+		if err := json.Unmarshal(existing, &old); err == nil {
+			clientID = old.ClientID
+			clientSecret = old.ClientSecret
+		}
+	}
+	if clientID == "" {
+		clientID = OAuthConfig.ClientID
+	}
+	if clientSecret == "" {
+		clientSecret = OAuthConfig.ClientSecret
+	}
+	return SaveCredentials(path, token, clientID, clientSecret)
 }
 
 // OpenBrowser opens a URL in the user's default browser
