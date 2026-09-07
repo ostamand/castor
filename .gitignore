@@ -16,3 +16,8 @@ coverage.txt
 *.swp
 *~
 .key
+
+# Environment and secrets
+.env
+.env.local
+.env.*.local
