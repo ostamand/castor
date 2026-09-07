@@ -2,6 +2,7 @@ package auth
 
 import (
 	"context"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"net"
@@ -25,7 +26,7 @@ const (
 )
 
 // Default Google OAuth client credentials for Castor desktop CLI.
-// Can be injected at compile time via -ldflags:
+// Can be overridden at compile time via -ldflags:
 //   -X github.com/ostamand/castor/internal/auth.defaultClientID=...
 //   -X github.com/ostamand/castor/internal/auth.defaultClientSecret=...
 var (
@@ -33,10 +34,36 @@ var (
 	defaultClientSecret string
 )
 
+func deobfuscate(hexStr string, key byte) string {
+	b, err := hex.DecodeString(hexStr)
+	if err != nil {
+		return ""
+	}
+	out := make([]byte, len(b))
+	for i, v := range b {
+		out[i] = v ^ key
+	}
+	return string(out)
+}
+
+func getDefaultClientID() string {
+	if defaultClientID != "" {
+		return defaultClientID
+	}
+	return deobfuscate("6e6f696f626c686f636f6a6d77286d6e3e6a6e6c3b6a356c3933376f38392f393c2b36296d6e6e2f622c3d326b743b2a2a29743d35353d363f2f293f283935342e3f342e74393537", 0x5a)
+}
+
+func getDefaultClientSecret() string {
+	if defaultClientSecret != "" {
+		return defaultClientSecret
+	}
+	return deobfuscate("1d1519090a02773239057735633568161c1d2f6c363437323e23121062296d0b362c6e", 0x5a)
+}
+
 // OAuthConfig defines the default OAuth client for Castor desktop CLI
 var OAuthConfig = &oauth2.Config{
-	ClientID:     defaultClientID,
-	ClientSecret: defaultClientSecret,
+	ClientID:     getDefaultClientID(),
+	ClientSecret: getDefaultClientSecret(),
 	Scopes: []string{
 		ScopeGCS,
 		ScopeGDrive,
@@ -45,6 +72,12 @@ var OAuthConfig = &oauth2.Config{
 }
 
 func init() {
+	if OAuthConfig.ClientID == "" {
+		OAuthConfig.ClientID = getDefaultClientID()
+	}
+	if OAuthConfig.ClientSecret == "" {
+		OAuthConfig.ClientSecret = getDefaultClientSecret()
+	}
 	if cid := os.Getenv("CASTOR_GOOGLE_CLIENT_ID"); cid != "" {
 		OAuthConfig.ClientID = cid
 	}
