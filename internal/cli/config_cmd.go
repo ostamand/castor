@@ -63,6 +63,8 @@ func runConfigShow(cmd *cobra.Command, args []string) error {
 		fmt.Printf("  • %s (%s)", dest.Name, dest.Provider)
 		if dest.Folder != "" {
 			fmt.Printf(" → folder: %s", dest.Folder)
+		} else if dest.Provider == "dropbox" || dest.Provider == "dbx" {
+			fmt.Printf(" → root (app folder)")
 		}
 		if dest.Bucket != "" {
 			fmt.Printf(" → bucket: %s", dest.Bucket)

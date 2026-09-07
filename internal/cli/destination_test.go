@@ -246,6 +246,53 @@ func TestDestinationAddDropbox(t *testing.T) {
 	}
 }
 
+func TestDestinationAddDropboxDefaultRoot(t *testing.T) {
+	testCfgPath, cleanup := setupTestConfig(t)
+	defer cleanup()
+
+	origCfgPath := cfgPath
+	origNoTUI := noTUI
+	defer func() {
+		cfgPath = origCfgPath
+		noTUI = origNoTUI
+	}()
+
+	cfgPath = testCfgPath
+	noTUI = true
+
+	// Add Dropbox destination with NO folder specified (recommended root of app folder)
+	destAddName = "root-dropbox"
+	destAddFolder = ""
+	err := runDestinationAdd(destinationAddCmd, []string{"dropbox"})
+	if err != nil {
+		t.Fatalf("failed to add default dropbox destination: %v", err)
+	}
+
+	cfg, err := config.LoadConfig(testCfgPath)
+	if err != nil {
+		t.Fatalf("failed to reload config: %v", err)
+	}
+
+	var found bool
+	for _, d := range cfg.Destinations {
+		if d.Name == "root-dropbox" && d.Provider == "dropbox" && d.Folder == "" {
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Errorf("root-dropbox destination not found with empty folder in config")
+	}
+
+	// Verify listing displays "root (app folder)"
+	output := captureOutput(func() {
+		_ = runDestinationList(destinationListCmd, []string{})
+	})
+	if !strings.Contains(output, "root (app folder)") {
+		t.Errorf("expected destination list to contain 'root (app folder)', got: %s", output)
+	}
+}
+
 func TestDestinationRemove(t *testing.T) {
 	testCfgPath, cleanup := setupTestConfig(t)
 	defer cleanup()

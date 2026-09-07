@@ -56,8 +56,8 @@ You can invoke this command using 'castor destination' or 'castor provider'.`,
   # Add a Google Drive destination
   castor provider add gdrive --folder CastorLodge --name gdrive-backup
 
-  # Add a Dropbox destination
-  castor provider add dropbox --folder CastorLodge --name dbx-backup
+  # Add a Dropbox destination (defaults to root of App folder)
+  castor provider add dropbox --name my-dropbox
 
   # Add a Google Cloud Storage bucket
   castor provider add gcs --bucket my-castor-coldline --location northamerica-northeast1
@@ -230,9 +230,9 @@ func formatDestinationLocation(dest config.DestinationConfig) string {
 		}
 		return "folder: " + folder
 	case "dropbox", "dbx":
-		folder := dest.Folder
+		folder := strings.Trim(dest.Folder, "/")
 		if folder == "" {
-			folder = "CastorLodge"
+			return "root (app folder)"
 		}
 		return "folder: " + folder
 	case "gcs":
@@ -418,9 +418,7 @@ func runDestinationAdd(cmd *cobra.Command, args []string) error {
 				return err
 			}
 		}
-		if folder == "" {
-			folder = "CastorLodge"
-		}
+		folder = strings.Trim(folder, "/")
 		newDest.Folder = folder
 
 		name := destAddName
@@ -565,13 +563,13 @@ func promptProviderType() (string, error) {
 }
 
 func promptDropboxFolder() (string, error) {
-	folder := "CastorLodge"
+	var folder string
 	form := huh.NewForm(
 		huh.NewGroup(
 			huh.NewInput().
-				Title("Dropbox Remote Folder").
-				Description("Enter the folder inside Dropbox to store archives:").
-				Placeholder("CastorLodge").
+				Title("Dropbox Remote Subfolder (Optional)").
+				Description("Dropbox App folder already isolates Castor. Press [Enter] for root, or specify a subfolder:").
+				Placeholder("(root of App folder)").
 				Value(&folder),
 		),
 	).WithTheme(tui.ThemeCastor())
@@ -579,7 +577,7 @@ func promptDropboxFolder() (string, error) {
 	if err := form.Run(); err != nil {
 		return "", err
 	}
-	return folder, nil
+	return strings.Trim(folder, "/"), nil
 }
 
 func promptLocalPath() (string, error) {

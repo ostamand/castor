@@ -27,7 +27,7 @@ func RunInitForm(defaultNamespace string) (*InitFormResult, error) {
 		Namespace:      defaultNamespace,
 		GCSLocation:    "northamerica-northeast1",
 		GDriveFolder:   "CastorLodge",
-		DropboxFolder:  "CastorLodge",
+		DropboxFolder:  "",
 		LocalPath:      "~/Backups/castor",
 		GenerateAgeKey: true,
 	}
@@ -137,16 +137,10 @@ func RunInitForm(defaultNamespace string) (*InitFormResult, error) {
 	if hasDropbox {
 		groups = append(groups, huh.NewGroup(
 			huh.NewInput().
-				Title("Dropbox Remote Folder").
-				Description("Folder in your Dropbox where archives will be stored").
-				Placeholder("CastorLodge").
-				Value(&result.DropboxFolder).
-				Validate(func(s string) error {
-					if strings.TrimSpace(s) == "" {
-						return fmt.Errorf("folder path cannot be empty")
-					}
-					return nil
-				}),
+				Title("Dropbox Remote Subfolder (Optional)").
+				Description("Dropbox App folder already isolates Castor. Press [Enter] for root, or specify a subfolder").
+				Placeholder("(root of App folder)").
+				Value(&result.DropboxFolder),
 		))
 	}
 
