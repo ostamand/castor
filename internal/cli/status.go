@@ -204,11 +204,18 @@ func runStatus(cmd *cobra.Command, args []string) error {
 		}
 	}
 
+	activeDests := cfg.ActiveDestinations()
+	disabledCount := len(cfg.Destinations) - len(activeDests)
+	destinationsText := fmt.Sprintf("%d active", len(activeDests))
+	if disabledCount > 0 {
+		destinationsText += fmt.Sprintf(" (%d disabled)", disabledCount)
+	}
+
 	// Emit JSON if requested
 	if jsonOut {
 		payload := StatusPayload{
 			Namespace:         cfg.Namespace,
-			DestinationsCount: len(cfg.Destinations),
+			DestinationsCount: len(activeDests),
 			StorageUsedBytes:  totalStorageBytes,
 			StorageUsedHuman:  storageText,
 			TimerActive:       timerInfo.Active,
@@ -229,9 +236,9 @@ func runStatus(cmd *cobra.Command, args []string) error {
 		return nil
 	}
 
-	headerCard := fmt.Sprintf("Namespace:     %s\nDestinations:  %d active\nStorage Used:  %s\nScheduled Run: %s\nLast Run:      %s",
+	headerCard := fmt.Sprintf("Namespace:     %s\nDestinations:  %s\nStorage Used:  %s\nScheduled Run: %s\nLast Run:      %s",
 		lipgloss.NewStyle().Bold(true).Foreground(tui.ColorAccent).Render(cfg.Namespace),
-		len(cfg.Destinations),
+		destinationsText,
 		storageText,
 		timerStatusText,
 		lastRunText,

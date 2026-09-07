@@ -61,6 +61,9 @@ func runConfigShow(cmd *cobra.Command, args []string) error {
 	fmt.Printf("Destinations (%d):\n", len(cfg.Destinations))
 	for _, dest := range cfg.Destinations {
 		fmt.Printf("  • %s (%s)", dest.Name, dest.Provider)
+		if dest.Disabled {
+			fmt.Printf(" %s", lipgloss.NewStyle().Foreground(tui.ColorMuted).Render("[disabled]"))
+		}
 		if dest.Folder != "" {
 			fmt.Printf(" → folder: %s", dest.Folder)
 		} else if dest.Provider == "dropbox" || dest.Provider == "dbx" {

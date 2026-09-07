@@ -67,9 +67,9 @@ func runPrune(cmd *cobra.Command, args []string) error {
 		validKeys[key] = true
 	}
 
-	// Connect to providers
+	// Connect to active providers
 	providers := make(map[string]storage.Provider)
-	for _, dest := range cfg.Destinations {
+	for _, dest := range cfg.ActiveDestinations() {
 		p, initErr := storage.NewProviderFromConfig(ctx, dest)
 		if initErr == nil {
 			defer p.Close()

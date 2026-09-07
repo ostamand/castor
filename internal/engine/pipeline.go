@@ -66,14 +66,14 @@ func StreamArchive(
 	}
 
 	// 3. Filter active destinations
-	activeDests := cfg.Destinations
+	activeDests := cfg.ActiveDestinations()
 	if len(target.Destinations) > 0 {
 		var filtered []config.DestinationConfig
 		targetDestMap := make(map[string]bool)
 		for _, d := range target.Destinations {
 			targetDestMap[d] = true
 		}
-		for _, d := range cfg.Destinations {
+		for _, d := range cfg.ActiveDestinations() {
 			if targetDestMap[d.Name] {
 				filtered = append(filtered, d)
 			}
@@ -82,7 +82,7 @@ func StreamArchive(
 	}
 
 	if len(activeDests) == 0 {
-		return nil, fmt.Errorf("no active storage destinations configured for target '%s'", targetName)
+		return nil, fmt.Errorf("no active storage destinations configured for target '%s' (all destinations disabled or unrouted)", targetName)
 	}
 
 	// 4. Resolve destination object names

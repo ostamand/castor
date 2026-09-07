@@ -48,6 +48,7 @@ type DestinationConfig struct {
 	Prefix   string `toml:"prefix,omitempty"`
 	Folder   string `toml:"folder,omitempty"` // For Google Drive e.g. "CastorLodge"
 	Path     string `toml:"path,omitempty"`   // For local directory provider e.g. "/mnt/vault"
+	Disabled bool   `toml:"disabled,omitempty"`
 }
 
 type TargetConfig struct {
@@ -354,4 +355,26 @@ func normalizeSegment(name string) string {
 	s = strings.Trim(s, "-")
 
 	return s
+}
+
+// ActiveDestinations returns only destinations that are not disabled.
+func (c *Config) ActiveDestinations() []DestinationConfig {
+	var active []DestinationConfig
+	for _, d := range c.Destinations {
+		if !d.Disabled {
+			active = append(active, d)
+		}
+	}
+	return active
+}
+
+// FindDestination returns the destination matching name (case-insensitively), its index, and true if found.
+func (c *Config) FindDestination(name string) (DestinationConfig, int, bool) {
+	nameLower := strings.ToLower(strings.TrimSpace(name))
+	for i, d := range c.Destinations {
+		if strings.ToLower(d.Name) == nameLower {
+			return d, i, true
+		}
+	}
+	return DestinationConfig{}, -1, false
 }

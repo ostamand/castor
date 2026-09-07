@@ -68,6 +68,8 @@ path = "/mnt/backup/castor"
 #   castor provider add local /mnt/backup/castor --name external-drive
 #   castor provider list
 #   castor provider test
+#   castor provider disable dropbox-backup  # Sets disabled = true (skipped by push & status)
+#   castor provider enable dropbox-backup   # Re-enables destination
 #   castor provider remove external-drive
 
 # Target: Git Repository

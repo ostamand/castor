@@ -78,6 +78,15 @@ func runDoctor(cmd *cobra.Command, args []string) error {
 	// 5. Check Cloud Destinations
 	if cfg != nil {
 		for _, dest := range cfg.Destinations {
+			if dest.Disabled {
+				rows = append(rows, []string{
+					fmt.Sprintf("Provider: %s", dest.Name),
+					fmt.Sprintf("%s destination disabled", dest.Provider),
+					tui.BadgeStatus("DISABLED"),
+				})
+				continue
+			}
+
 			prov, provErr := storage.NewProviderFromConfig(ctx, dest)
 
 			if provErr != nil {

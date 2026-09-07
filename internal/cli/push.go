@@ -23,6 +23,7 @@ var (
 	pushDryRun bool
 	pushForce  bool
 	pushWorkers int
+	pushDest   string
 )
 
 var pushCmd = &cobra.Command{
@@ -34,7 +35,8 @@ to your configured cloud storage destinations.`,
 	Example: `  castor push
   castor push myproject
   castor push -n
-  castor push --force`,
+  castor push --force
+  castor push --dest google-drive`,
 	RunE: runPush,
 }
 
@@ -42,6 +44,7 @@ func init() {
 	pushCmd.Flags().BoolVarP(&pushDryRun, "dry-run", "n", false, "Simulate push execution without sending data to cloud")
 	pushCmd.Flags().BoolVarP(&pushForce, "force", "f", false, "Force push all targets, ignoring fingerprint cache")
 	pushCmd.Flags().IntVarP(&pushWorkers, "workers", "w", 0, "Number of concurrent workers (default: from config)")
+	pushCmd.Flags().StringVarP(&pushDest, "dest", "d", "", "Stream only to specified destination name")
 }
 
 func runPush(cmd *cobra.Command, args []string) error {
@@ -85,9 +88,31 @@ func runPush(cmd *cobra.Command, args []string) error {
 		return nil
 	}
 
-	// Initialize cloud storage providers
+	// Initialize cloud storage providers for active destinations
+	activeDests := cfg.ActiveDestinations()
+	if pushDest != "" {
+		var filtered []config.DestinationConfig
+		for _, d := range activeDests {
+			if strings.EqualFold(d.Name, pushDest) {
+				filtered = append(filtered, d)
+				break
+			}
+		}
+		if len(filtered) == 0 {
+			if d, _, ok := cfg.FindDestination(pushDest); ok && d.Disabled {
+				return fmt.Errorf("destination '%s' is disabled. Re-enable it first with 'castor provider enable %s'", pushDest, pushDest)
+			}
+			return fmt.Errorf("destination '%s' not found or inactive. Run 'castor provider list' to see destinations", pushDest)
+		}
+		activeDests = filtered
+	}
+
+	if len(activeDests) == 0 {
+		return fmt.Errorf("no active storage destinations available (all destinations are disabled or none configured). Run 'castor provider list'")
+	}
+
 	providers := make(map[string]storage.Provider)
-	for _, dest := range cfg.Destinations {
+	for _, dest := range activeDests {
 		p, initErr := storage.NewProviderFromConfig(ctx, dest)
 		if initErr != nil {
 			return fmt.Errorf("failed to initialize provider '%s' (%s): %w", dest.Name, dest.Provider, initErr)
@@ -139,6 +164,15 @@ func runPush(cmd *cobra.Command, args []string) error {
 		}
 
 		activeDestNames := targetActiveDestinationNames(t, cfg)
+		if pushDest != "" {
+			var filtered []string
+			for _, d := range activeDestNames {
+				if strings.EqualFold(d, pushDest) {
+					filtered = append(filtered, d)
+				}
+			}
+			activeDestNames = filtered
+		}
 		existingState, exists := state.GetTarget(key)
 		contentChanged := pushForce || !exists || existingState.Fingerprint != currentFingerprint
 
@@ -421,13 +455,7 @@ func runPush(cmd *cobra.Command, args []string) error {
 }
 
 func resolveTargetDestinations(target config.TargetConfig, cfg *config.Config) string {
-	if len(target.Destinations) > 0 {
-		return strings.Join(target.Destinations, ", ")
-	}
-	var names []string
-	for _, d := range cfg.Destinations {
-		names = append(names, d.Name)
-	}
+	names := targetActiveDestinationNames(target, cfg)
 	if len(names) == 0 {
 		return "none"
 	}
@@ -435,11 +463,22 @@ func resolveTargetDestinations(target config.TargetConfig, cfg *config.Config) s
 }
 
 func targetActiveDestinationNames(target config.TargetConfig, cfg *config.Config) []string {
-	if len(target.Destinations) > 0 {
-		return target.Destinations
+	activeDests := cfg.ActiveDestinations()
+	activeMap := make(map[string]bool)
+	for _, d := range activeDests {
+		activeMap[d.Name] = true
 	}
+
 	var names []string
-	for _, d := range cfg.Destinations {
+	if len(target.Destinations) > 0 {
+		for _, d := range target.Destinations {
+			if activeMap[d] {
+				names = append(names, d)
+			}
+		}
+		return names
+	}
+	for _, d := range activeDests {
 		names = append(names, d.Name)
 	}
 	return names

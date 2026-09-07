@@ -361,3 +361,88 @@ func TestDestinationTestLocal(t *testing.T) {
 		t.Errorf("expected output to contain status 'ONLINE', got: %s", output)
 	}
 }
+
+func TestDestinationDisableAndEnable(t *testing.T) {
+	testCfgPath, cleanup := setupTestConfig(t)
+	defer cleanup()
+
+	origCfgPath := cfgPath
+	origNoTUI := noTUI
+	defer func() {
+		cfgPath = origCfgPath
+		noTUI = origNoTUI
+	}()
+
+	cfgPath = testCfgPath
+	noTUI = true
+
+	// Test 1: Disable nonexistent destination
+	err := runDestinationDisable(destinationDisableCmd, []string{"nonexistent"})
+	if err == nil {
+		t.Errorf("expected error when disabling nonexistent destination, got nil")
+	}
+
+	// Test 2: Disable existing destination
+	err = runDestinationDisable(destinationDisableCmd, []string{"initial-local"})
+	if err != nil {
+		t.Fatalf("failed to disable destination: %v", err)
+	}
+
+	// Verify disabled in config
+	cfg, err := config.LoadConfig(testCfgPath)
+	if err != nil {
+		t.Fatalf("failed to reload config: %v", err)
+	}
+	dest, _, found := cfg.FindDestination("initial-local")
+	if !found || !dest.Disabled {
+		t.Errorf("expected initial-local to be disabled in config")
+	}
+
+	// Verify listing displays DISABLED
+	output := captureOutput(func() {
+		_ = runDestinationList(destinationListCmd, []string{})
+	})
+	if !strings.Contains(output, "DISABLED") {
+		t.Errorf("expected destination list to contain 'DISABLED', got: %s", output)
+	}
+
+	// Test 3: Disabling again indicates already disabled
+	output = captureOutput(func() {
+		_ = runDestinationDisable(destinationDisableCmd, []string{"initial-local"})
+	})
+	if !strings.Contains(output, "already disabled") {
+		t.Errorf("expected output to mention 'already disabled', got: %s", output)
+	}
+
+	// Test 4: Enable destination
+	err = runDestinationEnable(destinationEnableCmd, []string{"initial-local"})
+	if err != nil {
+		t.Fatalf("failed to enable destination: %v", err)
+	}
+
+	// Verify enabled in config
+	cfg, err = config.LoadConfig(testCfgPath)
+	if err != nil {
+		t.Fatalf("failed to reload config: %v", err)
+	}
+	dest, _, found = cfg.FindDestination("initial-local")
+	if !found || dest.Disabled {
+		t.Errorf("expected initial-local to be enabled in config")
+	}
+
+	// Verify listing displays ACTIVE
+	output = captureOutput(func() {
+		_ = runDestinationList(destinationListCmd, []string{})
+	})
+	if !strings.Contains(output, "ACTIVE") {
+		t.Errorf("expected destination list to contain 'ACTIVE', got: %s", output)
+	}
+
+	// Test 5: Enabling again indicates already active
+	output = captureOutput(func() {
+		_ = runDestinationEnable(destinationEnableCmd, []string{"initial-local"})
+	})
+	if !strings.Contains(output, "already active") {
+		t.Errorf("expected output to mention 'already active', got: %s", output)
+	}
+}

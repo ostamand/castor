@@ -117,12 +117,12 @@ Your code remains strictly yours:
 
 Command | What It Does
 :--- | :---
-`castor push` | Packages, encrypts, and streams changed projects to your vaults (`-n` for dry run)
+`castor push` | Packages, encrypts, and streams changed projects to your vaults (`-n` dry run, `-d` single destination)
 `castor pull [target]` | Interactive fuzzy-search archive picker to restore any project
 `castor status` | Shows target drift, backup freshness, and multi-destination sync health
 `castor diff [target]` | Sub-second diff of local git commit/dirty state vs remote archive (zero download)
 `castor cat <target> <file>` | Streams a single file from a remote encrypted archive directly to stdout or disk
-`castor provider [list\|add\|rm\|test]` | Manage storage destinations (Local NAS, Google Drive, Dropbox, GCS)
+`castor provider [list\|add\|rm\|disable\|enable\|test]` | Manage storage destinations (Local NAS, Google Drive, Dropbox, GCS)
 `castor verify [target]` | In-memory stream decryption & SHA-256 integrity verification
 `castor mv <target> <new-name>` | Renames a project and migrates remote cloud archives without re-uploading
 `castor prune` | Safely cleans orphaned cloud archives no longer tracked in your config

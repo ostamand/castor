@@ -20,13 +20,13 @@ Command | Description | Common Flags
 `castor init` | Interactive onboarding wizard to setup namespace, storage, and Age keys | `--config, -c`
 `castor add <path>` | Register project or scan child directories for targets | `-r`, `-g`, `-y`, `-n`, `--name`, `--prefix`
 `castor remove <target>` | Remove registered target from config.toml (`--purge` to delete cloud archives) | `-y`, `--purge` (alias: `rm`)
-`castor provider [cmd]` | Manage storage destinations: list, add, remove, and test reachability | `list`, `add`, `remove`, `test` (alias: `destination`)
+`castor provider [cmd]` | Manage storage destinations: list, add, remove, disable, enable, and test | `list`, `add`, `remove`, `disable`, `enable`, `test`
 `castor config [edit]` | View configuration or open in `$EDITOR` with post-save validation & warnings | `edit`
 `castor status` | Show target drift, last sync timestamps, timer health, and last run outcome | `--json`, `--no-tui`
 `castor diff [target]` | Compare local workspace against remote archive manifest without downloading archive | `-k <key>`, `-d <dest>`, `--json`
 `castor inspect <target>` | Inspect archive contents in-memory without extracting to disk | `-k <key>`, `-p <pattern>`, `--json`
 `castor cat <target> <file>` | Stream single file directly from remote archive to stdout or `--out` | `-k <key>`, `-o <file>`
-`castor push [target]` | Stream changed targets directly to cloud destinations | `-n`, `-f`, `-w <N>`, `--no-tui`
+`castor push [target]` | Stream changed targets directly to cloud destinations | `-n`, `-f`, `-w <N>`, `-d <dest>`, `--no-tui`
 `castor pull [target]` | Decrypt and reconstitute an archive into local workspace | `--to <dir>`, `-k <key>`, `-f`, `--dest <name>`
 `castor verify [target]` | In-memory stream decryption & ciphertext SHA-256 validation | `-k <key>`, `--dest <name>`
 `castor ls` | List remote archives, byte sizes, and timestamps | `-s <ns>`, `--all-namespaces`, `--dest <name>`
@@ -94,6 +94,12 @@ castor provider add
 castor provider test
 castor provider test my-dropbox
 
+# Temporarily disable a provider without removing it:
+castor provider disable my-dropbox
+
+# Re-enable a disabled provider:
+castor provider enable my-dropbox
+
 # Remove a destination:
 castor provider remove local-nas -y
 ```
@@ -114,6 +120,9 @@ castor push --no-tui
 
 # Push only a specific target:
 castor push rollmind
+
+# Stream only to a specific destination:
+castor push --dest google-drive
 
 # Force upload ignoring fingerprint cache:
 castor push rollmind --force

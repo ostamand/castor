@@ -103,6 +103,28 @@ If invoked without arguments, an interactive setup prompt will guide you.`,
 	RunE: runDestinationAdd,
 }
 
+var destinationDisableCmd = &cobra.Command{
+	Use:     "disable <name>",
+	Aliases: []string{"off", "pause"},
+	Short:   "Temporarily disable a storage destination without removing it",
+	Long:    "Disables a storage destination so that push and status operations skip it.",
+	Example: `  castor provider disable my-dropbox
+  castor destination disable google-drive`,
+	Args: cobra.ExactArgs(1),
+	RunE: runDestinationDisable,
+}
+
+var destinationEnableCmd = &cobra.Command{
+	Use:     "enable <name>",
+	Aliases: []string{"on", "resume"},
+	Short:   "Re-enable a previously disabled storage destination",
+	Long:    "Enables a storage destination so that push and status operations include it.",
+	Example: `  castor provider enable my-dropbox
+  castor destination enable google-drive`,
+	Args: cobra.ExactArgs(1),
+	RunE: runDestinationEnable,
+}
+
 var destinationRemoveCmd = &cobra.Command{
 	Use:     "remove <name>",
 	Aliases: []string{"rm", "delete"},
@@ -139,6 +161,8 @@ func init() {
 	destinationCmd.AddCommand(destinationListCmd)
 	destinationCmd.AddCommand(destinationAddCmd)
 	destinationCmd.AddCommand(destinationRemoveCmd)
+	destinationCmd.AddCommand(destinationDisableCmd)
+	destinationCmd.AddCommand(destinationEnableCmd)
 	destinationCmd.AddCommand(destinationTestCmd)
 }
 
@@ -146,6 +170,8 @@ func init() {
 type DestinationSummary struct {
 	Name     string `json:"name"`
 	Provider string `json:"provider"`
+	Status   string `json:"status"`
+	Disabled bool   `json:"disabled"`
 	Location string `json:"location"`
 	Targets  string `json:"targets"`
 }
@@ -174,9 +200,15 @@ func runDestinationList(cmd *cobra.Command, args []string) error {
 	for _, dest := range cfg.Destinations {
 		loc := formatDestinationLocation(dest)
 		routing := computeTargetRouting(dest.Name, cfg)
+		statusStr := "active"
+		if dest.Disabled {
+			statusStr = "disabled"
+		}
 		summaries = append(summaries, DestinationSummary{
 			Name:     dest.Name,
 			Provider: dest.Provider,
+			Status:   statusStr,
+			Disabled: dest.Disabled,
 			Location: loc,
 			Targets:  routing,
 		})
@@ -189,7 +221,7 @@ func runDestinationList(cmd *cobra.Command, args []string) error {
 	boldStyle := lipgloss.NewStyle().Bold(true).Foreground(tui.ColorAccent)
 	fmt.Printf("%s · Storage Destinations (%s)\n\n", boldStyle.Render("🦫 Castor"), configPath)
 
-	headers := []string{"Name", "Provider", "Target Location", "Active Targets"}
+	headers := []string{"Name", "Provider", "Status", "Target Location", "Active Targets"}
 	var rows [][]string
 	for _, s := range summaries {
 		provBadge := s.Provider
@@ -204,17 +236,28 @@ func runDestinationList(cmd *cobra.Command, args []string) error {
 			provBadge = lipgloss.NewStyle().Foreground(tui.ColorWarning).Render("gcs")
 		}
 
+		statusBadge := tui.BadgeStatus("ACTIVE")
+		targetsStr := lipgloss.NewStyle().Foreground(tui.ColorSecondary).Render(s.Targets)
+		nameStr := lipgloss.NewStyle().Bold(true).Render(s.Name)
+
+		if s.Disabled {
+			statusBadge = lipgloss.NewStyle().Foreground(tui.ColorMuted).Render("DISABLED")
+			targetsStr = lipgloss.NewStyle().Foreground(tui.ColorMuted).Render(s.Targets + " (disabled)")
+			nameStr = lipgloss.NewStyle().Bold(true).Foreground(tui.ColorMuted).Render(s.Name)
+		}
+
 		rows = append(rows, []string{
-			lipgloss.NewStyle().Bold(true).Render(s.Name),
+			nameStr,
 			provBadge,
+			statusBadge,
 			s.Location,
-			lipgloss.NewStyle().Foreground(tui.ColorSecondary).Render(s.Targets),
+			targetsStr,
 		})
 	}
 
 	fmt.Println(tui.RenderTable(headers, rows))
 	fmt.Println()
-	fmt.Println(lipgloss.NewStyle().Faint(true).Render("💡 Test connectivity: castor provider test  •  Add destination: castor provider add"))
+	fmt.Println(lipgloss.NewStyle().Faint(true).Render("💡 Test: castor provider test  •  Add: castor provider add  •  Toggle: castor provider [enable|disable] <name>"))
 
 	return nil
 }
@@ -699,10 +742,81 @@ func runDestinationRemove(cmd *cobra.Command, args []string) error {
 	return nil
 }
 
+func runDestinationDisable(cmd *cobra.Command, args []string) error {
+	configPath := cfgPath
+	if configPath == "" {
+		configPath = config.DefaultConfigPath()
+	}
+
+	cfg, err := config.LoadConfig(configPath)
+	if err != nil {
+		return fmt.Errorf("failed to load configuration: %w", err)
+	}
+
+	targetName := strings.TrimSpace(args[0])
+	dest, idx, found := cfg.FindDestination(targetName)
+	if !found {
+		return fmt.Errorf("destination '%s' not found. Run 'castor provider list' to see available destinations", targetName)
+	}
+
+	if dest.Disabled {
+		fmt.Printf("ℹ Destination '%s' (%s) is already disabled.\n", dest.Name, dest.Provider)
+		return nil
+	}
+
+	cfg.Destinations[idx].Disabled = true
+	if err := config.SaveConfig(configPath, cfg); err != nil {
+		return fmt.Errorf("failed to save configuration: %w", err)
+	}
+
+	successIcon := lipgloss.NewStyle().Foreground(tui.ColorSuccess).Bold(true).Render("✔")
+	fmt.Printf("%s Disabled destination '%s' (%s)\n", successIcon, dest.Name, dest.Provider)
+	fmt.Println("  • It will be skipped during 'castor push' and ignored in 'castor status'")
+	fmt.Printf("  • Re-enable at any time with: castor provider enable %s\n", dest.Name)
+
+	return nil
+}
+
+func runDestinationEnable(cmd *cobra.Command, args []string) error {
+	configPath := cfgPath
+	if configPath == "" {
+		configPath = config.DefaultConfigPath()
+	}
+
+	cfg, err := config.LoadConfig(configPath)
+	if err != nil {
+		return fmt.Errorf("failed to load configuration: %w", err)
+	}
+
+	targetName := strings.TrimSpace(args[0])
+	dest, idx, found := cfg.FindDestination(targetName)
+	if !found {
+		return fmt.Errorf("destination '%s' not found. Run 'castor provider list' to see available destinations", targetName)
+	}
+
+	if !dest.Disabled {
+		fmt.Printf("ℹ Destination '%s' (%s) is already active.\n", dest.Name, dest.Provider)
+		return nil
+	}
+
+	cfg.Destinations[idx].Disabled = false
+	if err := config.SaveConfig(configPath, cfg); err != nil {
+		return fmt.Errorf("failed to save configuration: %w", err)
+	}
+
+	successIcon := lipgloss.NewStyle().Foreground(tui.ColorSuccess).Bold(true).Render("✔")
+	fmt.Printf("%s Enabled destination '%s' (%s)\n", successIcon, dest.Name, dest.Provider)
+	fmt.Printf("  • Run 'castor provider test %s' to verify connectivity\n", dest.Name)
+	fmt.Println("  • Run 'castor push' to sync pending archives")
+
+	return nil
+}
+
 type DestinationTestResult struct {
 	Name     string        `json:"name"`
 	Provider string        `json:"provider"`
 	Status   string        `json:"status"`
+	Disabled bool          `json:"disabled,omitempty"`
 	Latency  time.Duration `json:"latency_ms"`
 	Details  string        `json:"details"`
 }
@@ -758,6 +872,7 @@ func runDestinationTest(cmd *cobra.Command, args []string) error {
 				Name:     dest.Name,
 				Provider: dest.Provider,
 				Status:   "FAIL",
+				Disabled: dest.Disabled,
 				Latency:  elapsed,
 				Details:  err.Error(),
 			})
@@ -793,6 +908,7 @@ func runDestinationTest(cmd *cobra.Command, args []string) error {
 			Name:     dest.Name,
 			Provider: dest.Provider,
 			Status:   status,
+			Disabled: dest.Disabled,
 			Latency:  elapsed,
 			Details:  details,
 		})
@@ -807,8 +923,12 @@ func runDestinationTest(cmd *cobra.Command, args []string) error {
 	for _, res := range results {
 		latencyStr := fmt.Sprintf("%dms", res.Latency.Milliseconds())
 		badge := tui.BadgeStatus(res.Status)
+		nameStr := lipgloss.NewStyle().Bold(true).Render(res.Name)
+		if res.Disabled {
+			nameStr += " " + lipgloss.NewStyle().Foreground(tui.ColorMuted).Render("(disabled)")
+		}
 		rows = append(rows, []string{
-			lipgloss.NewStyle().Bold(true).Render(res.Name),
+			nameStr,
 			res.Provider,
 			latencyStr,
 			badge,

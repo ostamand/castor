@@ -116,3 +116,56 @@ func TestNormalizeTargetName(t *testing.T) {
 		}
 	}
 }
+
+func TestActiveDestinationsAndFindDestination(t *testing.T) {
+	cfg := &Config{
+		Namespace: "test-ns",
+		Destinations: []DestinationConfig{
+			{Name: "dest-active", Provider: "local", Path: "/tmp/active", Disabled: false},
+			{Name: "dest-disabled", Provider: "dropbox", Disabled: true},
+		},
+	}
+
+	active := cfg.ActiveDestinations()
+	if len(active) != 1 {
+		t.Fatalf("expected 1 active destination, got %d", len(active))
+	}
+	if active[0].Name != "dest-active" {
+		t.Errorf("expected active destination 'dest-active', got %s", active[0].Name)
+	}
+
+	// Test FindDestination case-insensitive
+	d, idx, found := cfg.FindDestination("DEST-DISABLED")
+	if !found {
+		t.Fatalf("expected to find DEST-DISABLED")
+	}
+	if idx != 1 {
+		t.Errorf("expected index 1, got %d", idx)
+	}
+	if !d.Disabled {
+		t.Errorf("expected destination to be disabled")
+	}
+
+	_, _, found = cfg.FindDestination("non-existent")
+	if found {
+		t.Errorf("expected not found for non-existent destination")
+	}
+
+	// Test persistence with SaveConfig / LoadConfig
+	tmpDir := t.TempDir()
+	path := filepath.Join(tmpDir, "config.toml")
+	if err := SaveConfig(path, cfg); err != nil {
+		t.Fatalf("SaveConfig failed: %v", err)
+	}
+	loaded, err := LoadConfig(path)
+	if err != nil {
+		t.Fatalf("LoadConfig failed: %v", err)
+	}
+	if len(loaded.ActiveDestinations()) != 1 {
+		t.Errorf("loaded active destinations count = %d, want 1", len(loaded.ActiveDestinations()))
+	}
+	d2, _, ok := loaded.FindDestination("dest-disabled")
+	if !ok || !d2.Disabled {
+		t.Errorf("expected loaded dest-disabled to have Disabled = true")
+	}
+}
