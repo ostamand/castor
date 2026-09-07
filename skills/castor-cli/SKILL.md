@@ -147,6 +147,25 @@ castor pull rollmind --to /tmp/restored-app --key $AGE_KEY --force
 castor pull rollmind --namespace laptop --key $AGE_KEY
 ```
 
+### 3b. Emergency Standalone Restoration Without CLI (`restore.sh`)
+If you downloaded a `.tar.zst.age` file on a machine without Castor installed, use the standalone `restore.sh` script:
+```bash
+# Decrypt and restore to ./my-app (auto-downloads standalone age if not in PATH):
+./restore.sh my-app.tar.zst.age
+
+# Extract to a specific directory:
+./restore.sh -k ~/.config/castor/keys.txt my-app.tar.zst.age ~/Projects/my-app
+
+# Run in one line via curl without cloning:
+curl -fsSL https://raw.githubusercontent.com/ostamand/castor/main/restore.sh | bash -s -- my-app.tar.zst.age
+
+# Pluck a single file straight to stdout:
+./restore.sh -f .env my-app.tar.zst.age > .env
+
+# List contents without extracting:
+./restore.sh -l my-app.tar.zst.age
+```
+
 ### 4. Remote Drift Comparison (`castor diff`)
 Compares active local workspaces against remote sidecar metadata manifests (`.meta.json.age`) without downloading or extracting the archive:
 ```bash

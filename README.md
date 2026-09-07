@@ -70,6 +70,19 @@ Need a `.env` or config file from a remote archive? Stream just that file withou
 castor cat my-app .env
 ```
 
+### 5. CLI-Free Standalone Decryption (`restore.sh`)
+Downloaded an archive manually from Dropbox or Google Drive onto a machine without the Castor CLI? Restore it with zero dependencies using our standalone script:
+```bash
+# Decrypt, decompress, and restore (including full git history):
+./restore.sh my-app.tar.zst.age
+
+# Or run in one line without cloning the repo:
+curl -fsSL https://raw.githubusercontent.com/ostamand/castor/main/restore.sh | bash -s -- my-app.tar.zst.age
+
+# Pluck a single file (.env) straight to stdout:
+./restore.sh -f .env my-app.tar.zst.age > .env
+```
+
 ---
 
 ## 💡 Core Principles: Why Castor?
