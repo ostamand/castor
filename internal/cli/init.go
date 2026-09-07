@@ -259,7 +259,7 @@ func runInit(cmd *cobra.Command, args []string) error {
 			if appKey != "" {
 				fmt.Println("\n🦫 Opening browser to authenticate with Dropbox...")
 				authCtx, authCancel := context.WithTimeout(context.Background(), 3*time.Minute)
-				if _, err := auth.DropboxLogin(authCtx, appKey); err != nil {
+				if _, err := auth.DropboxLogin(authCtx, appKey, false); err != nil {
 					fmt.Println(lipgloss.NewStyle().Foreground(tui.ColorWarning).Render(
 						fmt.Sprintf("⚠️  Dropbox authentication deferred (%v). You can log in later with 'castor auth login dropbox'.", err),
 					))

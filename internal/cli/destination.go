@@ -444,7 +444,7 @@ func runDestinationAdd(cmd *cobra.Command, args []string) error {
 				}
 				if appKey != "" {
 					ctx := context.Background()
-					if _, err := auth.DropboxLogin(ctx, appKey); err != nil {
+					if _, err := auth.DropboxLogin(ctx, appKey, false); err != nil {
 						fmt.Printf("⚠️  Dropbox login failed: %v\n", err)
 					}
 				}

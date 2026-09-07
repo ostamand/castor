@@ -48,12 +48,14 @@ var (
 	authLoginGDrive  bool
 	authLoginGCS     bool
 	authLoginDropbox bool
+	authLoginManual  bool
 )
 
 func init() {
 	authLoginCmd.Flags().BoolVar(&authLoginGDrive, "gdrive", false, "Authenticate for Google Drive only")
 	authLoginCmd.Flags().BoolVar(&authLoginGCS, "gcs", false, "Authenticate for Google Cloud Storage only")
 	authLoginCmd.Flags().BoolVar(&authLoginDropbox, "dropbox", false, "Authenticate for Dropbox")
+	authLoginCmd.Flags().BoolVarP(&authLoginManual, "manual", "m", false, "Manual mode: copy-paste authorization code from Dropbox (no redirect URL needed)")
 	authCmd.AddCommand(authLoginCmd)
 	authCmd.AddCommand(authStatusCmd)
 	authCmd.AddCommand(authLogoutCmd)
@@ -72,7 +74,7 @@ func runDropboxLogin(ctx context.Context) error {
 	fmt.Println("🦫 Castor · Dropbox OAuth 2.0 PKCE Authentication")
 	fmt.Printf("Opening browser to authorize Dropbox (files.content.write, files.content.read)...\n\n")
 
-	_, err := auth.DropboxLogin(ctx, appKey)
+	_, err := auth.DropboxLogin(ctx, appKey, authLoginManual)
 	if err != nil {
 		return err
 	}

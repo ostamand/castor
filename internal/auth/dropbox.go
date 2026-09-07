@@ -141,8 +141,9 @@ func generatePKCE() (verifier, challenge string, err error) {
 	return verifier, challenge, nil
 }
 
-// DropboxLogin executes the interactive browser-based OAuth 2.0 PKCE flow
-func DropboxLogin(ctx context.Context, appKey string) (*oauth2.Token, error) {
+// DropboxLogin executes the OAuth 2.0 PKCE flow.
+// If manual is true, redirect_uri is omitted and the authorization code is copied from Dropbox's website.
+func DropboxLogin(ctx context.Context, appKey string, manual bool) (*oauth2.Token, error) {
 	if appKey == "" {
 		appKey = GetDropboxAppKey()
 	}
@@ -153,6 +154,57 @@ func DropboxLogin(ctx context.Context, appKey string) (*oauth2.Token, error) {
 	verifier, challenge, err := generatePKCE()
 	if err != nil {
 		return nil, fmt.Errorf("failed to generate PKCE challenge: %w", err)
+	}
+
+	if manual {
+		conf := &oauth2.Config{
+			ClientID:     appKey,
+			ClientSecret: GetDropboxAppSecret(),
+			Endpoint:     dropboxEndpoint,
+			Scopes: []string{
+				"files.content.write",
+				"files.content.read",
+				"account_info.read",
+			},
+		}
+
+		authURL := conf.AuthCodeURL(
+			"castor-dropbox-state",
+			oauth2.SetAuthURLParam("code_challenge", challenge),
+			oauth2.SetAuthURLParam("code_challenge_method", "S256"),
+			oauth2.SetAuthURLParam("token_access_type", "offline"),
+		)
+
+		OpenBrowser(authURL)
+
+		fmt.Println("Opening browser to authorize Dropbox...")
+		fmt.Println("1. Click 'Allow' in your browser.")
+		fmt.Println("2. Copy the authorization code shown on the Dropbox page.")
+		fmt.Print("\nPaste the authorization code here: ")
+
+		reader := bufio.NewReader(os.Stdin)
+		code, err := reader.ReadString('\n')
+		if err != nil {
+			return nil, err
+		}
+		code = strings.TrimSpace(code)
+		if code == "" {
+			return nil, fmt.Errorf("authorization code cannot be empty")
+		}
+
+		token, err := conf.Exchange(
+			ctx,
+			code,
+			oauth2.SetAuthURLParam("code_verifier", verifier),
+		)
+		if err != nil {
+			return nil, fmt.Errorf("dropbox token exchange failed: %w", err)
+		}
+		credsPath := config.DefaultDropboxCredentialsPath()
+		if err := SaveDropboxCredentials(credsPath, token, appKey); err != nil {
+			return nil, fmt.Errorf("failed to save dropbox credentials: %w", err)
+		}
+		return token, nil
 	}
 
 	// Try standard fixed port 53682 first so registered redirect URI matches
@@ -167,7 +219,7 @@ func DropboxLogin(ctx context.Context, appKey string) (*oauth2.Token, error) {
 	defer listener.Close()
 
 	port := listener.Addr().(*net.TCPAddr).Port
-	redirectURL := fmt.Sprintf("http://127.0.0.1:%d/callback", port)
+	redirectURL := fmt.Sprintf("http://localhost:%d/callback", port)
 
 	conf := &oauth2.Config{
 		ClientID:     appKey,
