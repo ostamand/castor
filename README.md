@@ -6,7 +6,7 @@
 
 ### Effortless, private code backups to the storage you already own.
 
-Back up all your repositories, local branches, and stashes in seconds directly to **Google Drive**, **GCS**, or your **home drive**.<br>
+Back up all your repositories, local branches, and stashes in seconds directly to **Google Drive**, **Dropbox**, **GCS**, or your **home drive**.<br>
 Encrypted by default, lightning-fast, and completely daemon-free.
 
 <p align="center">
@@ -28,6 +28,7 @@ curl -fsSL https://ostamand.com/castor/install.sh | bash
 
 ```
 Your Projects & Repos ───(Encrypted In-Memory Stream)───┬───> Google Drive (Your idle storage)
+                                                        ├───> Dropbox (Scoped App folder)
                                                         ├───> Google Cloud Storage (Cheap coldline)
                                                         └───> Local NAS / External Drive
 ```
@@ -43,9 +44,10 @@ castor add ~/Work/git --scan --git-only
 ```
 
 ### 2. Plug in the storage you already own
-No new subscriptions. Back up to your existing Google Drive, low-cost GCS, or home drive:
+No new subscriptions. Back up to your existing Google Drive, Dropbox, low-cost GCS, or home drive:
 ```bash
-castor provider add gdrive --folder CastorLodge
+castor provider add dropbox                     # 1-click browser OAuth into scoped App folder
+castor provider add gdrive --folder CastorLodge # Google One / Drive
 castor provider add local /mnt/nas/castor --name local-nas
 ```
 
@@ -55,9 +57,9 @@ Streams in-memory. Zero temporary tarballs filling up your SSD:
 $ castor push
 🦫 Castor · Fast Encrypted Backup Engine (workstation)
 
-✔ [1/3] castor (git)      → google-drive, local-nas [12.4 MB in 1.1s]
-✔ [2/3] dotfiles (git)    → google-drive, local-nas [1.2 MB in 0.2s]
-✔ [3/3] notes (generic)   → google-drive, local-nas [8.5 MB in 0.7s]
+✔ [1/3] castor (git)      → google-drive, my-dropbox, local-nas [12.4 MB in 1.1s]
+✔ [2/3] dotfiles (git)    → google-drive, my-dropbox, local-nas [1.2 MB in 0.2s]
+✔ [3/3] notes (generic)   → google-drive, my-dropbox, local-nas [8.5 MB in 0.7s]
 
 ✔ Push complete! 3 targets synced, encrypted & streamed in 2.0s.
 ```
@@ -76,6 +78,7 @@ Castor is engineered around simple, uncompromising principles:
 
 ### 💰 1. Use the Storage You Already Own
 Why pay $10–$20/month for another cloud backup subscription when you already have gigabytes of idle storage? Castor connects directly to the providers you already use:
+* **Dropbox:** Scoped App folder storage (`Apps/Castor Archiver/`) with seamless OAuth 2.0 PKCE login.
 * **Google Drive:** Tap into the 2–5 TB included with your existing Google One plan.
 * **Google Cloud Storage:** Archive tier at **$0.0012 / GB / mo** (< $0.15/year for 10 GB of cold storage).
 * **Local NAS / External SSD:** Blazing-fast air-gapped snapshots at zero cost.
@@ -89,7 +92,7 @@ Your code remains strictly yours:
 ### 🎯 3. Explicit Targets & Multi-Destination Fan-Out
 * **Your Data Stays Where It Lives:** You never need to move repositories or drop files into a designated "Sync" folder. Castor reaches your projects wherever they are on your system.
 * **You Choose What Is Saved:** Backups are explicitly declared in `config.toml`. Nothing is synced without your approval.
-* **Stream Everywhere at Once:** Save to multiple places all at the same time—stream concurrently to Google Drive, GCS, and your local NAS in a single pass with failure isolation.
+* **Stream Everywhere at Once:** Save to multiple places all at the same time—stream concurrently to Google Drive, Dropbox, GCS, and your local NAS in a single pass with failure isolation.
 
 ### 🧘 4. You're in Control Always
 * **Zero Background Daemons:** No bloated desktop sync client running 24/7, eating 500 MB of RAM, thrashing CPU, indexing during a `git rebase`, or draining your laptop battery.
@@ -119,7 +122,7 @@ Command | What It Does
 `castor status` | Shows target drift, backup freshness, and multi-destination sync health
 `castor diff [target]` | Sub-second diff of local git commit/dirty state vs remote archive (zero download)
 `castor cat <target> <file>` | Streams a single file from a remote encrypted archive directly to stdout or disk
-`castor provider [list\|add\|rm\|test]` | Manage storage destinations (Local NAS, Google Drive, GCS)
+`castor provider [list\|add\|rm\|test]` | Manage storage destinations (Local NAS, Google Drive, Dropbox, GCS)
 `castor verify [target]` | In-memory stream decryption & SHA-256 integrity verification
 `castor mv <target> <new-name>` | Renames a project and migrates remote cloud archives without re-uploading
 `castor prune` | Safely cleans orphaned cloud archives no longer tracked in your config

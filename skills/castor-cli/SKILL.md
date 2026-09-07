@@ -33,7 +33,7 @@ Command | Description | Common Flags
 `castor prune` | Garbage-collect remote archives no longer registered in config | `-n`, `-y`
 `castor schedule [cmd]` | Manage automated background backup timer, inspect run history & logs | `enable`, `disable`, `status`, `history`, `logs`, `run`
 `castor doctor` | Comprehensive health check of tools, Age keys, timer, and providers | `--config, -c`
-`castor auth` | Manage Google Cloud and Google Drive OAuth credentials | `login`, `status`, `logout`
+`castor auth` | Manage Google Cloud, Google Drive, and Dropbox OAuth credentials | `login`, `status`, `logout`
 `castor uninstall` | Completely uninstall Castor binary, timers, and skills | `-y`, `--purge`
 
 --------------------------------------------------------------------------------
@@ -68,7 +68,7 @@ castor mv modo git/modo --dry-run
 ```
 
 ### 1c. Managing Storage Destinations & Providers (`castor provider` / `castor destination`)
-Castor supports zero-disk multi-cloud fan-out streaming to Local NVMe/NAS, Google Drive, and GCS:
+Castor supports zero-disk multi-cloud fan-out streaming to Local NVMe/NAS, Google Drive, Dropbox, and GCS:
 ```bash
 # List all configured destinations:
 castor provider list
@@ -77,6 +77,9 @@ castor destination
 # Add a local directory, external SSD, or NAS mount:
 castor provider add local /mnt/nas/castor --name local-nas
 castor provider add local ~/Backups/castor
+
+# Add a Dropbox destination (defaults to root of App folder):
+castor provider add dropbox --name my-dropbox
 
 # Add a Google Drive destination:
 castor provider add gdrive --folder CastorLodge --name google-drive
@@ -89,7 +92,7 @@ castor provider add
 
 # Test connectivity and write permissions:
 castor provider test
-castor provider test local-nas
+castor provider test my-dropbox
 
 # Remove a destination:
 castor provider remove local-nas -y

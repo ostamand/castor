@@ -51,13 +51,20 @@ name = "gdrive-personal"
 provider = "gdrive"
 folder = "CastorLodge"
 
-# Destination 3: Local Filesystem / External NVMe / NAS Mount
+# Destination 3: Dropbox (OAuth 2.0 PKCE, zero-disk streaming)
+[[destinations]]
+name = "dropbox-backup"
+provider = "dropbox"
+folder = ""                      # Empty string or omit to store directly in Apps/Castor Archiver/
+
+# Destination 4: Local Filesystem / External NVMe / NAS Mount
 [[destinations]]
 name = "external-drive"
 provider = "local"
 path = "/mnt/backup/castor"
 
 # Tip: You can also manage destinations directly via the CLI:
+#   castor provider add dropbox --name dropbox-backup
 #   castor provider add local /mnt/backup/castor --name external-drive
 #   castor provider list
 #   castor provider test
