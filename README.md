@@ -1,316 +1,157 @@
+<div align="center">
+
+<img src="assets/hero.png" alt="Castor - Sovereign Cold Storage for Developers" width="580" style="max-width: 100%; border-radius: 14px; box-shadow: 0 20px 60px rgba(255, 107, 0, 0.28), 0 8px 24px rgba(0, 242, 195, 0.15), 0 0 0 1px rgba(255, 107, 0, 0.25);">
+
 # Castor 🦫
 
-> Nature's engineer and lodge builder.
+### Effortless, private code backups to the storage you already own.
 
-**Castor** is a fast, developer-first cloud archiver and backup tool written in Go. It packages, encrypts, and streams your project workspaces directly into cloud storage (Google Cloud Storage, Google Drive, Local NAS/Drives) without staging intermediate files on disk or running heavy background agents.
+Back up all your repositories, local branches, and stashes in seconds directly to **Google Drive**, **GCS**, or your **home drive**.<br>
+Encrypted by default, lightning-fast, and completely daemon-free.
+
+<p align="center">
+  <a href="https://github.com/ostamand/castor"><img src="https://img.shields.io/badge/release-v0.1.0-FF6B00" alt="Release"></a>
+  <a href="https://github.com/ostamand/castor/actions/workflows/ci.yml"><img src="https://img.shields.io/badge/CI-passing-00F2C3" alt="CI"></a>
+  <a href="https://opensource.org/licenses/MIT"><img src="https://img.shields.io/badge/License-MIT-FF8533" alt="License: MIT"></a>
+  <a href="https://golang.org"><img src="https://img.shields.io/badge/Go-1.23+-06B6D4" alt="Go Version"></a>
+</p>
+
+```bash
+curl -fsSL https://ostamand.com/castor/install.sh | bash
+```
+
+[Website](https://ostamand.com/castor) • [CLI Guide](./skills/castor-cli/SKILL.md) • [Omarchy Plugin](https://ostamand.com/castor/omarchy)
+
+</div>
 
 ---
 
-## Key Features
-
-* **Per-Namespace Organization:** Organizes archives by friendly namespace (e.g. `workstation`, `laptop`, `work`). Multiple machines safely share the same storage bucket or Google Drive folder with **zero risk of collision**.
-* **Zero-Disk Streaming:** Streams `tar -> zstd -> age.Encrypt` in-memory directly to cloud HTTP/2 writers via `io.MultiWriter`. No multi-gigabyte scratch archives staged on your SSD.
-* **End-to-End Encryption:** Industry-standard Age encryption (`age1...` public key stored on device; private key kept safe in your password manager). Past backups cannot be decrypted even if your laptop is lost or compromised.
-* **100% Git Preservation:** Captures full committed history (`.castor/repo.bundle` including `refs/stash`) + active working tree uncommitted edits in a single unified container archive.
-* **First-Class Storage Backends:**
-  * **Google Cloud Storage (GCS):** Automatic Nearline/Coldline/Archive lifecycle management ($0.004/GB/mo).
-  * **Google Drive:** Back up directly to a designated folder via Google Drive API using personal Google One / Workspace quota.
-  * **Local Filesystem / NAS / External Drive:** Stream directly to local mount points, external backup drives, or local NAS (`provider = "local"`).
-* **Interactive Terminal UI:** Built with the Charm ecosystem (`bubbletea`, `huh`, `lipgloss`, `bubbles`) featuring split-pane checklists, live streaming progress bars, and fuzzy-search archive explorers (with automatic non-TTY fallback for systemd/cron).
-* **Defensive Live Archiving:** Bounded file reads (`copyWithBound`) prevent stream crashes when working on live projects with active background compilers or shifting files.
-* **In-Memory Verification (`castor verify`):** Validates archive decryptability and SHA-256 integrity against encrypted sidecars without unpacking to disk.
-
----
-
-## Installation
-
-### One-Liner (Recommended)
-```bash
-curl -fsSL https://raw.githubusercontent.com/ostamand/castor/main/install.sh | bash
 ```
-*Detects your OS and CPU architecture, installs the binary, and sets up LLM agent skills.*
-
-### From Source
-```bash
-git clone https://github.com/ostamand/castor.git
-cd castor
-make install
-```
-
-### Self-Upgrade
-```bash
-castor upgrade
-```
-
-### Uninstallation
-```bash
-# Clean binary, systemd user timer, and skills:
-castor uninstall
-
-# Or completely purge including config & local state (~/.config/castor):
-castor uninstall --purge
+Your Projects & Repos ───(Encrypted In-Memory Stream)───┬───> Google Drive (Your idle storage)
+                                                        ├───> Google Cloud Storage (Cheap coldline)
+                                                        └───> Local NAS / External Drive
 ```
 
 ---
 
-## Quick Start
+## ⚡ The 30-Second Demo
 
-### 1. Guided Setup Wizard
-Run the interactive onboarding wizard to configure your namespace, cloud backends, and encryption keys:
+### 1. Point at your projects
+Castor auto-discovers Git repositories and automatically ignores disposable build junk (`node_modules`, `.venv`, `target/`, `build/`, `dist/`):
 ```bash
-castor init
+castor add ~/Work/git --scan --git-only
 ```
 
-### 2. Add a Folder to Back Up
-Register a folder or project to back up:
+### 2. Plug in the storage you already own
+No new subscriptions. Back up to your existing Google Drive, low-cost GCS, or home drive:
 ```bash
-castor add ~/projects
-```
-*(Tip: Use `castor add ~/projects -r --git-only` to scan and add multiple Git repositories at once)*
-
-### 3. Inspect Backup Plan (Dry Run)
-Inspect what changed and what will be streamed to the cloud:
-```bash
-castor push -n
+castor provider add gdrive --folder CastorLodge
+castor provider add local /mnt/nas/castor --name local-nas
 ```
 
-### 4. Back Up to Cloud Storage
-Stream changed targets to all configured cloud destinations:
+### 3. Stream directly into your vaults
+Streams in-memory. Zero temporary tarballs filling up your SSD:
 ```bash
-castor push
+$ castor push
+🦫 Castor · Fast Encrypted Backup Engine (workstation)
+
+✔ [1/3] castor (git)      → google-drive, local-nas [12.4 MB in 1.1s]
+✔ [2/3] dotfiles (git)    → google-drive, local-nas [1.2 MB in 0.2s]
+✔ [3/3] notes (generic)   → google-drive, local-nas [8.5 MB in 0.7s]
+
+✔ Push complete! 3 targets synced, encrypted & streamed in 2.0s.
 ```
 
-### 5. Restore an Archive
-Launch the interactive fuzzy-search archive picker:
+### 4. Inspect or pluck a single file in seconds
+Need a `.env` or config file from a remote archive? Stream just that file without downloading the full archive:
 ```bash
-castor pull
-```
-Or restore directly by target name or custom destination:
-```bash
-# Restore to original workspace:
-castor pull rollmind
-
-# Or restore to a custom location:
-castor pull rollmind --to /tmp/restored-project --key $AGE_KEY
+castor cat my-app .env
 ```
 
 ---
 
-## CLI Command Reference
+## 💡 Core Principles: Why Castor?
 
-### `castor init`
-Guided onboarding wizard to configure namespace, cloud providers, and Age encryption.
-* **Flags:**
-  * `--config, -c <path>`: Path to config file (default: `~/.config/castor/config.toml`).
+Castor is engineered around simple, uncompromising principles:
 
-### `castor add <path> [flags]`
-Adds a folder directly as a backup target, or scans a parent directory for projects.
-* **Positional Arguments:**
-  * `<path>` *(required, string)*: Directory path to add or scan.
-* **Flags:**
-  * `--name <string>` *(optional, string)*: Custom name for the registered target (defaults to directory name).
-  * `-r, --recursive`, `--scan` *(optional, bool)*: Scan child directories to discover multiple projects.
-  * `-g, --git-only` *(optional, bool)*: Restrict discovery scan strictly to Git repositories.
-  * `--max-depth <int>` *(optional, int)*: Maximum directory recursion depth when scanning (default: 4).
-  * `--prefix <string>` *(optional, string)*: Prepend a prefix to target names (e.g. `work/`).
-  * `--type <string>` *(optional, string)*: Target type for non-Git directories (`generic`, `documents`, `media`).
-  * `-y, --yes` *(optional, bool)*: Non-interactive mode; add targets without confirmation prompt.
-  * `-n, --dry-run` *(optional, bool)*: Preview targets without modifying `config.toml`.
+### 💰 1. Use the Storage You Already Own
+Why pay $10–$20/month for another cloud backup subscription when you already have gigabytes of idle storage? Castor connects directly to the providers you already use:
+* **Google Drive:** Tap into the 2–5 TB included with your existing Google One plan.
+* **Google Cloud Storage:** Archive tier at **$0.0012 / GB / mo** (< $0.15/year for 10 GB of cold storage).
+* **Local NAS / External SSD:** Blazing-fast air-gapped snapshots at zero cost.
 
-### `castor push [target] [flags]`
-Streams changed targets directly to all active cloud destinations.
-* **Positional Arguments:**
-  * `[target]` *(optional, string)*: Specific target name or path to push (pushes all changed targets if omitted).
-* **Flags:**
-  * `-n, --dry-run` *(optional, bool)*: Simulate push without uploading data.
-  * `-f, --force` *(optional, bool)*: Force push all targets ignoring fingerprint cache.
-  * `-w, --workers <int>` *(optional, int)*: Number of concurrent upload workers.
+### 🔐 2. True Zero-Knowledge Encryption
+Your code remains strictly yours:
+* **Encrypted on Your Machine:** Every archive is encrypted client-side with modern Age (`age1...`) cryptography before touching the wire or remote storage.
+* **The Cloud Never Sees Your Files:** Cloud providers only store encrypted blobs. File names, directory structures, and code contents are completely invisible.
+* **Even Castor Has No Keys:** Castor operates purely client-side; only your public key is stored on your machine for backups. Castor never has access to your private key. Encryption keys stay under your sovereign custody.
 
-### `castor pull [target] [flags]`
-Decrypts and reconstitutes an archive into your workspace.
-* **Positional Arguments:**
-  * `[target]` *(optional, string)*: Archive key to restore (launches interactive picker if omitted).
-* **Flags:**
-  * `-s, --namespace <string>` *(optional, string)*: Namespace to restore from.
-  * `--to <string>` *(optional, string)*: Restore into a custom directory path.
-  * `-f, --force` *(optional, bool)*: Overwrite existing local files without prompt.
-  * `--dest <string>` *(optional, string)*: Specific destination to pull from.
-  * `-k, --key <string>` *(optional, string)*: Age secret key (or set `CASTOR_AGE_KEY`).
+### 🎯 3. Explicit Targets & Multi-Destination Fan-Out
+* **Your Data Stays Where It Lives:** You never need to move repositories or drop files into a designated "Sync" folder. Castor reaches your projects wherever they are on your system.
+* **You Choose What Is Saved:** Backups are explicitly declared in `config.toml`. Nothing is synced without your approval.
+* **Stream Everywhere at Once:** Save to multiple places all at the same time—stream concurrently to Google Drive, GCS, and your local NAS in a single pass with failure isolation.
 
-### `castor ls [flags]`
-Lists remote cloud archives, byte sizes, and timestamps.
-* **Flags:**
-  * `-s, --namespace <string>` *(optional, string)*: List archives for a specific namespace.
-  * `--all-namespaces` *(optional, bool)*: List archives across all namespaces in the vault.
-  * `--dest <string>` *(optional, string)*: Filter to a specific destination provider.
-  * `-i, --interactive` *(optional, bool)*: Launch interactive archive browser.
+### 🧘 4. You're in Control Always
+* **Zero Background Daemons:** No bloated desktop sync client running 24/7, eating 500 MB of RAM, thrashing CPU, indexing during a `git rebase`, or draining your laptop battery.
+* **Explicit & Predictable:** Backups run only when you invoke `castor push`—or on lightweight, native system timers (`castor schedule enable`) that run while you sleep and immediately exit.
 
-### `castor verify [target] [flags]`
-Streams archive down, tests in-memory Age decryption, and validates SHA-256 against sidecar manifest.
-* **Flags:**
-  * `-s, --namespace <string>` *(optional, string)*: Namespace to verify.
-  * `--dest <string>` *(optional, string)*: Destination to verify against.
-  * `-k, --key <string>` *(optional, string)*: Age secret key (or set `CASTOR_AGE_KEY`).
-
-### `castor status`
-Displays drift between local targets and local state cache, systemd timer health, and orphaned archives.
-
-### `castor diff [target] [flags]`
-Compares active local workspaces against remote sidecar metadata manifests (`.meta.json.age`) in the vault without downloading the full archive.
-* **Flags:**
-  * `-k, --key <string>`: Age secret key (or export `CASTOR_AGE_KEY`).
-  * `-d, --dest <string>`: Destination to compare against.
-  * `-s, --namespace <string>`: Target namespace to inspect.
-  * `--json`: Emit machine-readable JSON drift summary.
-
-### `castor inspect <target> [flags]`
-Decompresses and decrypts the remote archive stream directly in memory, displaying the full file table with sizes and permissions without extracting to disk.
-* **Aliases:** `view`, `info`
-* **Flags:**
-  * `-k, --key <string>`: Age secret key (or export `CASTOR_AGE_KEY`).
-  * `-p, --pattern <string>`: Filter file paths by glob pattern (e.g. `*.go`, `config/*`).
-  * `-d, --dest <string>`: Specific destination to inspect.
-  * `-s, --namespace <string>`: Namespace to inspect.
-  * `--json`: Emit archive manifest and entry list as JSON.
-
-### `castor cat <target> <file-path> [flags]`
-Streams a single file directly from the remote archive to `stdout` or an output path and immediately aborts the stream once transferred.
-* **Flags:**
-  * `-k, --key <string>`: Age secret key (or export `CASTOR_AGE_KEY`).
-  * `-o, --out <path>`: Write output to a local file instead of standard output.
-  * `-d, --dest <string>`: Specific destination to read from.
-  * `-s, --namespace <string>`: Namespace to inspect.
-
-### `castor prune [flags]`
-Garbage-collects cloud archives that were removed from `config.toml`.
-* **Flags:**
-  * `-n, --dry-run` *(optional, bool)*: List orphaned archives without deleting.
-  * `-y, --yes` *(optional, bool)*: Confirm deletion without interactive prompt.
-
-### `castor auth [login|status|logout]`
-Manages Google Cloud Storage and Google Drive OAuth credentials.
-
-### `castor doctor`
-Diagnoses system tools (`git`), systemd timers, Age keys, and cloud reachability.
-
-### `castor schedule [on|off|status|run]`
-Turns automated background backups on or off using Linux user systemd timers.
-* **Subcommands / Arguments:**
-  * `on` / `enable`: Activates nightly background backups (03:00 AM, AC power only).
-  * `off` / `disable`: Deactivates automated background runs.
-  * `status`: Displays active state and next run timestamp.
-  * `run`: Triggers a background backup immediately.
-
-### `castor uninstall [flags]`
-Completely uninstalls Castor from your system without needing the source repository or Makefile.
-* **Flags:**
-  * `-y, --yes`: Non-interactive confirmation.
-  * `--purge`: Also permanently deletes `~/.config/castor` (configuration and Age encryption keys). Preserved by default to prevent accidental loss of vault access.
+### 📦 5. 100% Git Fidelity & Clean Archives
+* **Never Lose Work Again:** Backs up full commit history, local branch heads, uncommitted WIP edits, untracked scratch files, and active stashes (`refs/stash`) bundled into `.castor/repo.bundle`.
+* **Developer-Aware by Default:** Automatically filters out disposable build junk (`node_modules`, `.venv`, `target/`, `dist/`), keeping your archives lean, fast, and focused on your actual code.
 
 ---
 
-## Configuration Reference (`~/.config/castor/config.toml`)
+## ✨ Features You'll Love
 
-```toml
-namespace = "workstation"   # Vault-scoped storage partition
-
-[performance]
-max_workers = 4             # Concurrent upload workers
-compression_level = 19      # zstd level (1-22, 19 = optimal cold storage)
-
-[safety]
-max_archive_size_gb = 5.0   # Circuit breaker ceiling per target
-
-[security]
-encrypt = true
-encryption_method = "age"
-age_public_keys = [
-    "age1ql3z7hjy54pw3hyww5ayyfg7zqgvc7w3j2elw8zmrj2kg5sfn9aqmcac8p"
-]
-
-[[destinations]]
-name = "gcp-coldline"
-provider = "gcs"
-bucket = "castor-vault-montreal"
-location = "northamerica-northeast1"
-prefix = "archives"
-
-[[destinations]]
-name = "gdrive-mirror"
-provider = "gdrive"
-folder = "CastorLodge"
-
-[[destinations]]
-name = "backup-disk"
-provider = "local"
-path = "/mnt/backup/castor-vault"
-
-[[targets]]
-name = "rollmind"
-path = "~/projects/rollmind"
-type = "git"
-compression = "zstd"
-create_git_bundle = true
-
-[[targets]]
-name = "documents-vault"
-path = "~/Documents/Vault"
-type = "documents"
-compression = "xz"
-
-[[targets]]
-name = "caddy"
-path = "/etc/caddy"
-type = "documents"
-compression = "zstd"
-
-[rules.git]
-excludes = [
-    ".git", "node_modules", ".npm", ".yarn", ".pnpm-store",
-    ".next", ".nuxt", ".turbo", "dist", "build", "out",
-    "__pycache__", "*.pyc", ".venv", "venv", "env",
-    "target", "bin", "obj", "*.log", ".DS_Store"
-]
-```
+* ⚡ **Peek Without Downloading (`castor cat`):** Grab a `.env` or single source file from cold storage in milliseconds straight to stdout without downloading full multi-gigabyte archives.
+* 🚀 **Direct In-Memory Streaming:** Pipes encrypted archives straight to your cloud vaults in RAM. Zero temporary staging tarballs filling up your SSD.
+* 🤖 **Built for AI Coding Agents:** Ships with native skills for Claude, Gemini, and Antigravity so autonomous coding assistants can safely verify, audit, and run backups for you.
+* 🎨 **Delightful Terminal UI:** Snappy Lipgloss interface with live progress bars, target drift detection, and clear color-coded statuses.
 
 ---
 
-## Testing & Quality Assurance
+## 🧰 Commands
 
-Castor includes a comprehensive regression and end-to-end integration test suite executed with Go's race detector enabled:
+Command | What It Does
+:--- | :---
+`castor push` | Packages, encrypts, and streams changed projects to your vaults (`-n` for dry run)
+`castor pull [target]` | Interactive fuzzy-search archive picker to restore any project
+`castor status` | Shows target drift, backup freshness, and multi-destination sync health
+`castor diff [target]` | Sub-second diff of local git commit/dirty state vs remote archive (zero download)
+`castor cat <target> <file>` | Streams a single file from a remote encrypted archive directly to stdout or disk
+`castor provider [list\|add\|rm\|test]` | Manage storage destinations (Local NAS, Google Drive, GCS)
+`castor verify [target]` | In-memory stream decryption & SHA-256 integrity verification
+`castor mv <target> <new-name>` | Renames a project and migrates remote cloud archives without re-uploading
+`castor prune` | Safely cleans orphaned cloud archives no longer tracked in your config
+
+---
+
+## 🤖 Built for AI Agents & Customizers
+
+Castor is engineered to be **agent-native**. It ships with pre-configured skills in `skills/` so autonomous AI coding agents (Claude, Gemini, Antigravity, Cursor) can manage your archives safely:
+
+* **`castor-cli`**: Teaches agents how to onboard projects, inspect drift, and verify archives.
+* **`castor-customizer`**: Guides agents on tuning Zstandard compression levels, editing filters, or extending the Go streaming engine.
 
 ```bash
-# Run all unit, regression, and full CLI integration tests
-make test
-
-# Compile binary into bin/castor
-make build
+make install-skills   # Symlinks skills to ~/.gemini/config/skills/
 ```
-
-### Key Areas Tested
-* **Full CLI Lifecycle Integration (`cli_integration_test.go`):** Exercises the complete sequence (`doctor` → `add` → `status` → `push` → `ls` → `verify` → `pull` → `prune`) in an isolated sandbox.
-* **100% Git Reconstitution (`pipeline_restore_test.go`):** Validates that `.castor/repo.bundle` reconstitutes the entire committed history, all local branch heads, active stashes (`git stash list` & `git stash pop`), and uncommitted working-tree edits.
-* **Live Shifting-File Safety (`archive_test.go`):** Verifies that `copyWithBound` clamps files that grow dynamically during tar streaming and zero-pads shrinking/vanished files without corrupting the tar stream.
-* **Microsecond Tree Drift (`fingerprint_test.go`):** Tests state transitions across clean commits, unstaged changes, staged additions, untracked files, and stashes to guarantee zero false transfers.
----
-
-## LLM & Agent Skills (Customization via AI)
-
-Castor ships with built-in agent skills stored inside the repository (`skills/`) to allow LLMs and autonomous coding assistants to safely operate, customize, and extend Castor:
-
-| Skill | Path | Description |
-| :--- | :--- | :--- |
-| `castor-cli` | [`skills/castor-cli/SKILL.md`](./skills/castor-cli/SKILL.md) | Teaches LLMs how to operate the CLI, run backups, restore archives, verify integrity, and inspect drift. |
-| `castor-customizer` | [`skills/castor-customizer/SKILL.md`](./skills/castor-customizer/SKILL.md) | Guides LLMs on modifying `config.toml`, adding targets, implementing custom storage providers in Go, and tuning compression. |
-
-To link these skills into your local agent environment (similarly to Omarchy):
-```bash
-make install-skills
-```
-This creates symlinks from the repository into `~/.gemini/config/skills/`, ensuring that any updates in the repo are immediately reflected to your LLM assistant.
 
 ---
 
-## License
+## 📚 Deep Dives & References
 
-MIT / Apache-2.0
+Need technical specifications or customization guides? Everything is documented in detail:
+
+* 📖 **[CLI Operations Reference (`skills/castor-cli/SKILL.md`)](./skills/castor-cli/SKILL.md)** — Complete reference for every command, flag, and recovery procedure.
+* 🛠️ **[Customization Guide (`skills/castor-customizer/SKILL.md`)](./skills/castor-customizer/SKILL.md)** — How to add new storage backends and tune compression.
+* 🐧 **[Omarchy Linux Plugin](./internal/cli/status.go)** — System bar status indicators, idle triggers, and desktop notifications.
+
+---
+
+<div align="center">
+
+**Castor** is 100% open-source software under the [MIT License](./LICENSE).<br>
+Built with Go, Age, Zstandard, and Charm.
+
+</div>

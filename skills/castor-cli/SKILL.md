@@ -2,14 +2,14 @@
 name: castor-cli
 description: >-
   Operate, inspect, backup, restore, verify, and troubleshoot with the Castor cold-storage archiver CLI (`castor`).
-  Use this skill whenever interacting with Castor vaults, discovering and adding targets, creating or restoring archives,
+  Use this skill whenever interacting with Castor archives, discovering and adding targets, creating or restoring archives,
   verifying in-memory decryptability and SHA-256 integrity, managing cloud destinations (GCS, Google Drive, local NAS),
   or diagnosing system health.
 ---
 
 # Castor CLI Operations Guide
 
-`castor` is an intentional, developer-first cold-storage vault and multi-cloud streaming archiver. It streams encrypted, compressed archives directly to remote storage without staging intermediate tarballs on local disk.
+`castor` is an intentional, developer-first cold-storage and multi-cloud streaming archiver. It streams encrypted, compressed archives directly to remote storage without staging intermediate tarballs on local disk.
 
 --------------------------------------------------------------------------------
 
@@ -18,9 +18,12 @@ description: >-
 Command | Description | Common Flags
 :--- | :--- | :---
 `castor init` | Interactive onboarding wizard to setup namespace, storage, and Age keys | `--config, -c`
-`castor add <path>` | Interactively discover and register child projects into `config.toml` | `-r`, `-g`, `-y`, `-n`, `--prefix`
-`castor status` | Show target drift, last sync timestamps, systemd timer health, orphans | `--json`, `--no-tui`
-`castor diff [target]` | Compare local workspace against remote vault manifest without downloading archive | `-k <key>`, `-d <dest>`, `--json`
+`castor add <path>` | Register project or scan child directories for targets | `-r`, `-g`, `-y`, `-n`, `--name`, `--prefix`
+`castor remove <target>` | Remove registered target from config.toml (`--purge` to delete cloud archives) | `-y`, `--purge` (alias: `rm`)
+`castor provider [cmd]` | Manage storage destinations: list, add, remove, and test reachability | `list`, `add`, `remove`, `test` (alias: `destination`)
+`castor config [edit]` | View configuration or open in `$EDITOR` with post-save validation & warnings | `edit`
+`castor status` | Show target drift, last sync timestamps, timer health, and last run outcome | `--json`, `--no-tui`
+`castor diff [target]` | Compare local workspace against remote archive manifest without downloading archive | `-k <key>`, `-d <dest>`, `--json`
 `castor inspect <target>` | Inspect archive contents in-memory without extracting to disk | `-k <key>`, `-p <pattern>`, `--json`
 `castor cat <target> <file>` | Stream single file directly from remote archive to stdout or `--out` | `-k <key>`, `-o <file>`
 `castor push [target]` | Stream changed targets directly to cloud destinations | `-n`, `-f`, `-w <N>`, `--no-tui`
@@ -28,7 +31,7 @@ Command | Description | Common Flags
 `castor verify [target]` | In-memory stream decryption & ciphertext SHA-256 validation | `-k <key>`, `--dest <name>`
 `castor ls` | List remote archives, byte sizes, and timestamps | `-s <ns>`, `--all-namespaces`, `--dest <name>`
 `castor prune` | Garbage-collect remote archives no longer registered in config | `-n`, `-y`
-`castor schedule [on|off]` | Manage automated nightly background timers | `on`, `off`, `status`, `run`
+`castor schedule [cmd]` | Manage automated background backup timer, inspect run history & logs | `enable`, `disable`, `status`, `history`, `logs`, `run`
 `castor doctor` | Comprehensive health check of tools, Age keys, timer, and providers | `--config, -c`
 `castor auth` | Manage Google Cloud and Google Drive OAuth credentials | `login`, `status`, `logout`
 `castor uninstall` | Completely uninstall Castor binary, timers, and skills | `-y`, `--purge`
@@ -50,6 +53,47 @@ castor add ~/Work/git -r --git-only --yes
 castor add ~/Work/git -r --git-only
 ```
 *Note: Build junk (`node_modules`, `.venv`, `target`, `build`) is automatically pruned. Git repositories are treated as atomic units (their internal subdirectories are never split into separate targets).*
+
+### 1b. Renaming Targets (`castor mv` / `castor rename`)
+Renames an existing target in `config.toml`, migrates local state tracking in `state.json`, and stream-renames remote cloud archives and sidecar metadata across all active destinations without re-uploading:
+```bash
+# Rename target:
+castor mv modo git/modo
+
+# Using alias:
+castor rename git/modo personal/modo
+
+# Dry-run preview:
+castor mv modo git/modo --dry-run
+```
+
+### 1c. Managing Storage Destinations & Providers (`castor provider` / `castor destination`)
+Castor supports zero-disk multi-cloud fan-out streaming to Local NVMe/NAS, Google Drive, and GCS:
+```bash
+# List all configured destinations:
+castor provider list
+castor destination
+
+# Add a local directory, external SSD, or NAS mount:
+castor provider add local /mnt/nas/castor --name local-nas
+castor provider add local ~/Backups/castor
+
+# Add a Google Drive destination:
+castor provider add gdrive --folder CastorLodge --name google-drive
+
+# Add a Google Cloud Storage bucket:
+castor provider add gcs --bucket my-castor-coldline --location northamerica-northeast1
+
+# Interactive wizard (prompts for provider, name, and settings):
+castor provider add
+
+# Test connectivity and write permissions:
+castor provider test
+castor provider test local-nas
+
+# Remove a destination:
+castor provider remove local-nas -y
+```
 
 ### 2. Inspecting and Running Backups (`castor push`)
 ```bash
@@ -171,4 +215,4 @@ Symptom | Probable Cause | Resolution
 `unknown Age recipient / private key required` | Backup is encrypted but no private key was provided for restore/verify. | Provide private key via `-k <key>` or export `CASTOR_AGE_KEY=AGE-SECRET-KEY-1...`.
 `destination directory already exists` | `castor pull` guards against accidental overwrites. | Use `-f / --force` to overwrite existing files, or specify `--to <new-dir>`.
 `not a git repository` | Target configured with `type = "git"` is missing `.git`. | Change `type = "generic"` in `config.toml` or initialize Git.
-`refusing to fetch into checked-out branch` | Older version of Castor during pull reconstitution. | Reconstituted using `git clone --mirror` in Castor v0.4.0+. Upgrade with `make install`.
+`refusing to fetch into checked-out branch` | Older version of Castor during pull reconstitution. | Reconstituted using `git clone --mirror` in Castor v0.1.0+. Upgrade with `make install`.

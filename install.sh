@@ -171,6 +171,6 @@ echo "  2. Add a folder to back up:"
 echo "     ${BOLD}castor add ~/projects${RESET}"
 echo "  3. Inspect drift and remote sync status:"
 echo "     ${BOLD}castor status${RESET}"
-echo "  4. Turn on automated nightly backups:"
+echo "  4. Turn on automated scheduled backups:"
 echo "     ${BOLD}castor schedule on${RESET}"
 echo

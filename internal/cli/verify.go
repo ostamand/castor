@@ -34,6 +34,9 @@ var verifyCmd = &cobra.Command{
 	Short:   "Verify archive integrity and decryptability in-memory",
 	Long: `Streams down the remote archive, tests Age decryption and decompression in-memory,
 and verifies the ciphertext SHA-256 against the sidecar metadata manifest without unpacking to disk.`,
+	Example: `  castor verify
+  castor verify myproject
+  castor verify -k AGE-SECRET-KEY-1...`,
 	RunE: runVerify,
 }
 
@@ -101,7 +104,7 @@ func runVerify(cmd *cobra.Command, args []string) error {
 		targetsToVerify = []string{args[0]}
 	} else {
 		for _, t := range cfg.Targets {
-			key := config.CanonicalCloudKey(targetNamespace, t.Path, t.Namespace)
+			key := config.CanonicalCloudKey(targetNamespace, t.Name)
 			targetsToVerify = append(targetsToVerify, key)
 		}
 	}

@@ -76,4 +76,43 @@ func TestConfigValidation(t *testing.T) {
 	if err := cfg.Validate(); err == nil {
 		t.Errorf("Expected error for encrypt=true with no age_public_keys, got nil")
 	}
+
+	cfg.Security.Encrypt = false
+	cfg.Targets = []TargetConfig{
+		{Name: "app", Path: "/path/one"},
+		{Name: "app", Path: "/path/two"},
+	}
+	if err := cfg.Validate(); err == nil {
+		t.Errorf("Expected error for duplicate target name 'app', got nil")
+	}
+}
+
+func TestNormalizeTargetName(t *testing.T) {
+	tests := []struct {
+		input string
+		want  string
+	}{
+		{"MyProject", "my-project"},
+		{"my_project", "my-project"},
+		{"my project", "my-project"},
+		{"generated-visions-workflows", "generated-visions-workflows"},
+		{"HTMLParser", "html-parser"},
+		{"myApp2", "my-app2"},
+		{"My.Config.File", "my-config-file"},
+		{"__leading__", "leading"},
+		{"castor", "castor"},
+		{"ALLCAPS", "allcaps"},
+		{"App A", "app-a"},
+		{"monster word lab", "monster-word-lab"},
+		{"vo2", "vo2"},
+		{"work/MyProject", "work/my-project"},
+		{"git/castor/v1", "git/castor/v1"},
+		{"/leading/slash/", "leading/slash"},
+	}
+	for _, tt := range tests {
+		got := NormalizeTargetName(tt.input)
+		if got != tt.want {
+			t.Errorf("NormalizeTargetName(%q) = %q, want %q", tt.input, got, tt.want)
+		}
+	}
 }

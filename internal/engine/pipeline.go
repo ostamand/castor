@@ -27,6 +27,7 @@ type ArchiveResult struct {
 	ArchiveSHA256     string
 	Duration          time.Duration
 	DestErrors        map[string]error
+	StreamedDests     []string
 }
 
 // ProgressFunc reports live bytes streamed to the dashboard
@@ -44,7 +45,7 @@ func StreamArchive(
 	targetPath := sysinfo.ExpandHome(target.Path)
 
 	// 1. Resolve canonical cloud key
-	canonicalKey := config.CanonicalCloudKey(cfg.Namespace, target.Path, target.Namespace)
+	canonicalKey := config.CanonicalCloudKey(cfg.Namespace, target.Name)
 	targetName := target.Name
 	if targetName == "" {
 		targetName = path.Base(canonicalKey)
@@ -206,9 +207,10 @@ func StreamArchive(
 	for _, dest := range activeDests {
 		prov := providers[dest.Name]
 		mw, err := prov.NewWriter(ctx, metaRemotePath)
-		if err == nil {
-			metaNamedWriters = append(metaNamedWriters, storage.NamedWriter{Name: dest.Name, Writer: mw})
+		if err != nil {
+			return nil, fmt.Errorf("failed to open metadata writer for '%s': %w", dest.Name, err)
 		}
+		metaNamedWriters = append(metaNamedWriters, storage.NamedWriter{Name: dest.Name, Writer: mw})
 	}
 	if len(metaNamedWriters) > 0 {
 		metaMulti := storage.NewMultiDestinationWriter(metaNamedWriters)
@@ -221,8 +223,18 @@ func StreamArchive(
 			gitMeta, compression, cfg.Performance.CompressionLevel,
 			cfg.Security.Encrypt, uncompressedBytes, sha256Sum,
 		)
-		_ = PushMetadata(ctx, metaMulti, meta, cfg.Security.AgePublicKeys)
-		_ = metaMulti.Close()
+		if pushErr := PushMetadata(ctx, metaMulti, meta, cfg.Security.AgePublicKeys); pushErr != nil {
+			_ = metaMulti.Close()
+			return nil, fmt.Errorf("failed to write metadata manifest: %w", pushErr)
+		}
+		if closeMetaErr := metaMulti.Close(); closeMetaErr != nil {
+			return nil, fmt.Errorf("failed to flush metadata manifest: %w", closeMetaErr)
+		}
+	}
+
+	var streamedNames []string
+	for _, dest := range activeDests {
+		streamedNames = append(streamedNames, dest.Name)
 	}
 
 	return &ArchiveResult{
@@ -236,5 +248,6 @@ func StreamArchive(
 		ArchiveSHA256:     sha256Sum,
 		Duration:          time.Since(start),
 		DestErrors:        multiWriter.Errors(),
+		StreamedDests:     streamedNames,
 	}, closeMultiErr
 }

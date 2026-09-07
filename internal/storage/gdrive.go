@@ -16,12 +16,13 @@ import (
 
 // GDriveProvider implements storage.Provider for Google Drive REST API v3
 type GDriveProvider struct {
-	name        string
-	folderPath  string
+	name         string
+	folderPath   string
 	rootFolderID string
-	service     *drive.Service
-	folderCache map[string]string
-	cacheMu     sync.RWMutex
+	service      *drive.Service
+	folderCache  map[string]string
+	cacheMu      sync.RWMutex
+	hierarchyMu  sync.Mutex
 }
 
 // NewGDriveProvider initializes the Google Drive provider and resolves the root folder
@@ -65,11 +66,32 @@ func (g *GDriveProvider) resolveOrCreateHierarchy(ctx context.Context, parentID,
 	}
 	g.cacheMu.RUnlock()
 
+	// Acquire hierarchyMu so concurrent workers don't race on folder creation
+	g.hierarchyMu.Lock()
+	defer g.hierarchyMu.Unlock()
+
+	// Re-check cache after acquiring lock
+	g.cacheMu.RLock()
+	if cachedID, ok := g.folderCache[cacheKey]; ok {
+		g.cacheMu.RUnlock()
+		return cachedID, nil
+	}
+	g.cacheMu.RUnlock()
+
 	parts := strings.Split(clean, "/")
 	currentParent := parentID
 
 	for _, part := range parts {
 		if part == "" || part == "." {
+			continue
+		}
+
+		stepKey := currentParent + ":" + part
+		g.cacheMu.RLock()
+		cachedStepID, ok := g.folderCache[stepKey]
+		g.cacheMu.RUnlock()
+		if ok {
+			currentParent = cachedStepID
 			continue
 		}
 
@@ -81,6 +103,18 @@ func (g *GDriveProvider) resolveOrCreateHierarchy(ctx context.Context, parentID,
 
 		if len(res.Files) > 0 {
 			currentParent = res.Files[0].Id
+			// If duplicate folders exist under this parent, consolidate them into the canonical folder
+			if len(res.Files) > 1 {
+				for _, dup := range res.Files[1:] {
+					children, err := g.service.Files.List().Q(fmt.Sprintf("'%s' in parents and trashed = false", dup.Id)).Fields("files(id)").Context(ctx).Do()
+					if err == nil {
+						for _, child := range children.Files {
+							_, _ = g.service.Files.Update(child.Id, nil).AddParents(currentParent).RemoveParents(dup.Id).Context(ctx).Do()
+						}
+					}
+					_ = g.service.Files.Delete(dup.Id).Context(ctx).Do()
+				}
+			}
 		} else {
 			folder, err := g.service.Files.Create(&drive.File{
 				Name:     part,
@@ -92,6 +126,10 @@ func (g *GDriveProvider) resolveOrCreateHierarchy(ctx context.Context, parentID,
 			}
 			currentParent = folder.Id
 		}
+
+		g.cacheMu.Lock()
+		g.folderCache[stepKey] = currentParent
+		g.cacheMu.Unlock()
 	}
 
 	g.cacheMu.Lock()
@@ -131,6 +169,22 @@ func (g *GDriveProvider) findFileID(ctx context.Context, parentID, name string) 
 	return res.Files[0].Id, nil
 }
 
+type gdriveWriter struct {
+	pw       *io.PipeWriter
+	doneChan chan error
+}
+
+func (w *gdriveWriter) Write(p []byte) (int, error) {
+	return w.pw.Write(p)
+}
+
+func (w *gdriveWriter) Close() error {
+	if err := w.pw.Close(); err != nil {
+		return err
+	}
+	return <-w.doneChan
+}
+
 // NewWriter streams an object directly into Google Drive via an in-memory pipe
 func (g *GDriveProvider) NewWriter(ctx context.Context, objectName string) (io.WriteCloser, error) {
 	parentID, fileName, err := g.resolveTargetFolder(ctx, objectName)
@@ -139,6 +193,7 @@ func (g *GDriveProvider) NewWriter(ctx context.Context, objectName string) (io.W
 	}
 
 	pr, pw := io.Pipe()
+	doneChan := make(chan error, 1)
 
 	go func() {
 		// Deduplication check: update if already exists, else create new
@@ -162,9 +217,10 @@ func (g *GDriveProvider) NewWriter(ctx context.Context, objectName string) (io.W
 		}
 
 		_ = pr.CloseWithError(uploadErr)
+		doneChan <- uploadErr
 	}()
 
-	return pw, nil
+	return &gdriveWriter{pw: pw, doneChan: doneChan}, nil
 }
 
 // NewReader downloads an object stream from Google Drive

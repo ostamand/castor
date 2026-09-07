@@ -1,7 +1,6 @@
 package tui
 
 import (
-	"fmt"
 	"strings"
 
 	"github.com/charmbracelet/lipgloss"
@@ -13,16 +12,17 @@ func RenderTable(headers []string, rows [][]string) string {
 		return ""
 	}
 
-	// Calculate maximum width per column
+	// Calculate maximum width per column taking ANSI styling into account
 	colWidths := make([]int, len(headers))
 	for i, h := range headers {
-		colWidths[i] = len(h)
+		colWidths[i] = lipgloss.Width(h)
 	}
 
 	for _, row := range rows {
 		for i, cell := range row {
-			if i < len(colWidths) && len(cell) > colWidths[i] {
-				colWidths[i] = len(cell)
+			w := lipgloss.Width(cell)
+			if i < len(colWidths) && w > colWidths[i] {
+				colWidths[i] = w
 			}
 		}
 	}
@@ -39,7 +39,11 @@ func RenderTable(headers []string, rows [][]string) string {
 	// Header row
 	var headerCells []string
 	for i, h := range headers {
-		headerCells = append(headerCells, fmt.Sprintf("%-*s", colWidths[i], h))
+		padding := colWidths[i] - lipgloss.Width(h)
+		if padding < 0 {
+			padding = 0
+		}
+		headerCells = append(headerCells, h+strings.Repeat(" ", padding))
 	}
 	sb.WriteString(headerStyle.Render(strings.Join(headerCells, "   ")) + "\n")
 
@@ -47,8 +51,11 @@ func RenderTable(headers []string, rows [][]string) string {
 	for _, row := range rows {
 		var rowCells []string
 		for i, cell := range row {
-			width := colWidths[i]
-			rowCells = append(rowCells, fmt.Sprintf("%-*s", width, cell))
+			padding := colWidths[i] - lipgloss.Width(cell)
+			if padding < 0 {
+				padding = 0
+			}
+			rowCells = append(rowCells, cell+strings.Repeat(" ", padding))
 		}
 		sb.WriteString(strings.Join(rowCells, "   ") + "\n")
 	}
@@ -61,7 +68,7 @@ func BadgeStatus(status string) string {
 	switch strings.ToUpper(status) {
 	case "SYNCED", "ONLINE", "ACTIVE", "HEALTHY":
 		return StyleBadgeSuccess.Render(" " + status + " ")
-	case "DRIFT", "WARNING", "MODIFIED":
+	case "DRIFT", "WARNING", "MODIFIED", "DESYNC", "PARTIAL":
 		return StyleBadgeWarning.Render(" " + status + " ")
 	case "ORPHAN", "UNTRACKED":
 		return StyleBadgeInfo.Render(" " + status + " ")

@@ -41,7 +41,7 @@ age_public_keys = [
 [[destinations]]
 name = "gcp-coldline"
 provider = "gcs"
-bucket = "my-castor-cold-vault"
+bucket = "my-castor-coldline"
 location = "northamerica-northeast1"
 prefix = "archives"
 
@@ -55,7 +55,13 @@ folder = "CastorLodge"
 [[destinations]]
 name = "external-drive"
 provider = "local"
-path = "/mnt/backup/castor-vault"
+path = "/mnt/backup/castor"
+
+# Tip: You can also manage destinations directly via the CLI:
+#   castor provider add local /mnt/backup/castor --name external-drive
+#   castor provider list
+#   castor provider test
+#   castor provider remove external-drive
 
 # Target: Git Repository
 [[targets]]

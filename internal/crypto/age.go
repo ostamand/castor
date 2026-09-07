@@ -72,3 +72,26 @@ func DecryptStream(r io.Reader, secretKey string) (io.ReadCloser, error) {
 
 	return io.NopCloser(reader), nil
 }
+
+// ParseRecipientOrIdentity validates and extracts an Age public key (age1...)
+// from either a public key string or a secret key string (AGE-SECRET-KEY-1...)
+func ParseRecipientOrIdentity(input string) (string, error) {
+	clean := strings.TrimSpace(input)
+	if strings.HasPrefix(clean, "age1") {
+		_, err := age.ParseX25519Recipient(clean)
+		if err != nil {
+			return "", fmt.Errorf("invalid Age public key: %w", err)
+		}
+		return clean, nil
+	}
+
+	if strings.HasPrefix(clean, "AGE-SECRET-KEY-1") {
+		identity, err := age.ParseX25519Identity(clean)
+		if err != nil {
+			return "", fmt.Errorf("invalid Age secret key: %w", err)
+		}
+		return identity.Recipient().String(), nil
+	}
+
+	return "", fmt.Errorf("key must begin with 'age1' (public key) or 'AGE-SECRET-KEY-1' (secret key)")
+}

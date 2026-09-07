@@ -6,6 +6,7 @@ import (
 	"os"
 	"path"
 	"path/filepath"
+	"strings"
 	"sync"
 	"time"
 
@@ -30,6 +31,10 @@ var pushCmd = &cobra.Command{
 	Short:   "Back up changed projects to your cloud storage",
 	Long: `Packages, encrypts, and streams your project workspaces directly
 to your configured cloud storage destinations.`,
+	Example: `  castor push
+  castor push myproject
+  castor push -n
+  castor push --force`,
 	RunE: runPush,
 }
 
@@ -41,6 +46,7 @@ func init() {
 
 func runPush(cmd *cobra.Command, args []string) error {
 	ctx := context.Background()
+	runStarted := time.Now().UTC()
 	configPath := cfgPath
 	if configPath == "" {
 		configPath = config.DefaultConfigPath()
@@ -51,7 +57,8 @@ func runPush(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("failed to load configuration: %w (run 'castor init' first)", err)
 	}
 
-	state, err := config.LoadState(config.DefaultStatePath())
+	statePath := config.StatePathForConfig(configPath)
+	state, err := config.LoadState(statePath)
 	if err != nil {
 		return fmt.Errorf("failed to load state: %w", err)
 	}
@@ -59,10 +66,10 @@ func runPush(cmd *cobra.Command, args []string) error {
 	// Filter targets if argument specified
 	targetsToProcess := cfg.Targets
 	if len(args) > 0 {
-		filter := stringsTrim(args[0])
+		filter := strings.TrimSpace(filepath.Clean(args[0]))
 		var filtered []config.TargetConfig
 		for _, t := range cfg.Targets {
-			key := config.CanonicalCloudKey(cfg.Namespace, t.Path, t.Namespace)
+			key := config.CanonicalCloudKey(cfg.Namespace, t.Name)
 			if t.Name == filter || path.Base(key) == filter || filepath.Clean(t.Path) == filter {
 				filtered = append(filtered, t)
 			}
@@ -91,18 +98,24 @@ func runPush(cmd *cobra.Command, args []string) error {
 
 	// Fingerprint and identify changes
 	type targetJob struct {
-		target       config.TargetConfig
-		canonicalKey string
-		name         string
-		changed      bool
-		fingerprint  string
+		target               config.TargetConfig
+		canonicalKey         string
+		name                 string
+		changed              bool
+		changeReason         string
+		destinationsToStream []string
+		fingerprint          string
+		totalBytes           int64
+		packageBytes         int64
+		excludeBytes         int64
+		destinations         string
 	}
 
 	var jobs []targetJob
 	var changedTargetNames []string
 
 	for _, t := range targetsToProcess {
-		key := config.CanonicalCloudKey(cfg.Namespace, t.Path, t.Namespace)
+		key := config.CanonicalCloudKey(cfg.Namespace, t.Name)
 		name := t.Name
 		if name == "" {
 			name = path.Base(key)
@@ -125,15 +138,51 @@ func runPush(cmd *cobra.Command, args []string) error {
 			continue
 		}
 
+		activeDestNames := targetActiveDestinationNames(t, cfg)
 		existingState, exists := state.GetTarget(key)
-		changed := pushForce || !exists || existingState.Fingerprint != currentFingerprint
+		contentChanged := pushForce || !exists || existingState.Fingerprint != currentFingerprint
+
+		var streamDestNames []string
+		var changeReason string
+
+		if contentChanged {
+			streamDestNames = activeDestNames
+			if !exists {
+				changeReason = "New target"
+			} else if pushForce {
+				changeReason = "Force push"
+			} else {
+				changeReason = "Content modified"
+			}
+		} else {
+			// Content unchanged: check if any active destination is not yet synced
+			for _, dName := range activeDestNames {
+				dState, dExists := existingState.Destinations[dName]
+				if !dExists || !dState.Synced {
+					streamDestNames = append(streamDestNames, dName)
+				}
+			}
+			if len(streamDestNames) > 0 {
+				changeReason = fmt.Sprintf("Sync to %s", strings.Join(streamDestNames, ", "))
+			}
+		}
+
+		changed := len(streamDestNames) > 0
+		sizeEst := engine.EstimateTargetSize(t, cfg.Rules)
+		dests := resolveTargetDestinations(t, cfg)
 
 		jobs = append(jobs, targetJob{
-			target:       t,
-			canonicalKey: key,
-			name:         name,
-			changed:      changed,
-			fingerprint:  currentFingerprint,
+			target:               t,
+			canonicalKey:         key,
+			name:                 name,
+			changed:              changed,
+			changeReason:         changeReason,
+			destinationsToStream: streamDestNames,
+			fingerprint:          currentFingerprint,
+			totalBytes:           sizeEst.TotalBytes,
+			packageBytes:         sizeEst.PackagedBytes,
+			excludeBytes:         sizeEst.ExcludedBytes,
+			destinations:         dests,
 		})
 
 		if changed {
@@ -145,19 +194,59 @@ func runPush(cmd *cobra.Command, args []string) error {
 	if pushDryRun {
 		fmt.Printf("🦫 Castor · Plan for '%s' (%d total targets):\n\n", cfg.Namespace, len(jobs))
 		var rows [][]string
+		var toStreamCount int
+		var toStreamPackageBytes int64
+		var unchangedCount int
+
 		for _, j := range jobs {
 			action := lipgloss.NewStyle().Foreground(tui.ColorMuted).Render("Unchanged (skip)")
 			if j.changed {
-				action = lipgloss.NewStyle().Foreground(tui.ColorAccent).Bold(true).Render("Stream to Cloud")
+				targetDestDesc := strings.Join(j.destinationsToStream, ", ")
+				if len(j.destinationsToStream) == len(cfg.Destinations) && len(cfg.Destinations) > 1 {
+					targetDestDesc = "all destinations"
+				}
+				action = lipgloss.NewStyle().Foreground(tui.ColorAccent).Bold(true).Render("Stream to " + targetDestDesc)
+				toStreamCount++
+				toStreamPackageBytes += j.packageBytes
+			} else {
+				unchangedCount++
 			}
-			rows = append(rows, []string{j.name, j.target.Type, j.canonicalKey, action})
+			rows = append(rows, []string{
+				j.name,
+				j.target.Type,
+				tui.FormatBytes(j.totalBytes),
+				tui.FormatBytes(j.packageBytes),
+				j.destinations,
+				j.canonicalKey,
+				action,
+			})
 		}
-		fmt.Println(tui.RenderTable([]string{"Target", "Type", "Cloud Key", "Planned Action"}, rows))
+		fmt.Println(tui.RenderTable([]string{"Target", "Type", "On Disk", "To Archive", "Destination", "Cloud Key", "Planned Action"}, rows))
+		fmt.Printf("\nPlan Summary: %d to stream (%s payload), %d unchanged\n",
+			toStreamCount, tui.FormatBytes(toStreamPackageBytes), unchangedCount)
+		tui.MaybePrintTip(cfg.AreTipsEnabled())
 		return nil
 	}
 
 	if len(changedTargetNames) == 0 {
 		fmt.Println("✔ All targets are up to date. (0 B transferred)")
+		tui.MaybePrintTip(cfg.AreTipsEnabled())
+
+		// Record up-to-date run
+		historyPath := config.HistoryPathForConfig(configPath)
+		trigger := "manual"
+		if os.Getenv("CASTOR_SCHEDULED") == "1" {
+			trigger = "scheduled"
+		}
+		_ = config.AppendRun(historyPath, config.RunRecord{
+			StartedAt:      runStarted,
+			FinishedAt:     time.Now().UTC(),
+			Trigger:        trigger,
+			TargetsTotal:   len(targetsToProcess),
+			TargetsSkipped: len(targetsToProcess),
+			Status:         "success",
+		})
+
 		return nil
 	}
 
@@ -170,7 +259,16 @@ func runPush(cmd *cobra.Command, args []string) error {
 		numWorkers = len(changedTargetNames)
 	}
 
-	dashboard := tui.NewLiveDashboard(changedTargetNames)
+	targetTotals := make(map[string]int64)
+	targetDestinations := make(map[string]string)
+	for _, j := range jobs {
+		if j.changed {
+			targetTotals[j.name] = j.packageBytes
+			targetDestinations[j.name] = strings.Join(j.destinationsToStream, ", ")
+		}
+	}
+
+	dashboard := tui.NewLiveDashboard(changedTargetNames, targetTotals, targetDestinations)
 	defer dashboard.Stop()
 
 	jobsChan := make(chan targetJob, len(jobs))
@@ -182,15 +280,18 @@ func runPush(cmd *cobra.Command, args []string) error {
 		go func() {
 			defer wg.Done()
 			for job := range jobsChan {
-				res, err := engine.StreamArchive(ctx, job.target, cfg, providers, func(name string, bytes int64, done bool) {
+				jobTarget := job.target
+				jobTarget.Destinations = job.destinationsToStream
+				res, err := engine.StreamArchive(ctx, jobTarget, cfg, providers, func(name string, bytes int64, done bool) {
 					dashboard.Update(name, bytes, done, nil)
 				})
 				if err != nil {
 					dashboard.Update(job.name, 0, true, err)
 					resultsChan <- &engine.ArchiveResult{
-						TargetName: job.name,
-						CanonicalKey: job.canonicalKey,
-						DestErrors: map[string]error{"stream": err},
+						TargetName:    job.name,
+						CanonicalKey:  job.canonicalKey,
+						DestErrors:    map[string]error{"stream": err},
+						StreamedDests: job.destinationsToStream,
 					}
 				} else {
 					dashboard.Update(job.name, res.CipherBytes, true, nil)
@@ -225,15 +326,29 @@ func runPush(cmd *cobra.Command, args []string) error {
 
 		totalTransferred += res.CipherBytes
 
-		// Update state
+		// Update state preserving existing synced destinations
+		existingState, exists := state.GetTarget(res.CanonicalKey)
 		destStates := make(map[string]config.DestinationState)
-		for _, d := range cfg.Destinations {
-			destStates[d.Name] = config.DestinationState{
-				Synced:        true,
-				CipherBytes:   res.CipherBytes,
-				ArchiveSHA256: res.ArchiveSHA256,
+		if exists && existingState.Destinations != nil {
+			for k, v := range existingState.Destinations {
+				destStates[k] = v
 			}
 		}
+
+		for _, dName := range res.StreamedDests {
+			if res.DestErrors[dName] == nil {
+				destStates[dName] = config.DestinationState{
+					Synced:        true,
+					CipherBytes:   res.CipherBytes,
+					ArchiveSHA256: res.ArchiveSHA256,
+				}
+			} else {
+				destStates[dName] = config.DestinationState{
+					Synced: false,
+				}
+			}
+		}
+
 		state.SetTarget(res.CanonicalKey, config.TargetState{
 			Fingerprint:  res.Fingerprint,
 			LastPush:     time.Now().UTC(),
@@ -241,12 +356,36 @@ func runPush(cmd *cobra.Command, args []string) error {
 		})
 	}
 
-	_ = config.SaveState(config.DefaultStatePath(), state)
+	_ = config.SaveState(statePath, state)
 
 	// Summary output
 	fmt.Println()
 	if len(pushErrors) > 0 {
 		sysinfo.SendDesktopAlert("Castor Backup Alert", fmt.Sprintf("Backup completed with %d error(s). Run 'castor status'.", len(pushErrors)), true)
+		
+		// Record failed/partial run in history
+		historyPath := config.HistoryPathForConfig(configPath)
+		trigger := "manual"
+		if os.Getenv("CASTOR_SCHEDULED") == "1" {
+			trigger = "scheduled"
+		}
+		runRecord := config.RunRecord{
+			StartedAt:      runStarted,
+			FinishedAt:     time.Now().UTC(),
+			Trigger:        trigger,
+			TargetsTotal:   len(targetsToProcess),
+			TargetsSynced:  len(changedTargetNames) - len(pushErrors),
+			TargetsSkipped: len(targetsToProcess) - len(changedTargetNames),
+			TargetsFailed:  len(pushErrors),
+			BytesStreamed:  totalTransferred,
+			Errors:         pushErrors,
+			Status:         "partial",
+		}
+		if len(changedTargetNames) == len(pushErrors) {
+			runRecord.Status = "failed"
+		}
+		_ = config.AppendRun(historyPath, runRecord)
+
 		return fmt.Errorf("backup completed with %d errors:\n  %s", len(pushErrors), fmt.Sprintf("%v", pushErrors))
 	}
 
@@ -257,9 +396,51 @@ func runPush(cmd *cobra.Command, args []string) error {
 		time.Now().Format("15:04:05"),
 	)
 
+	tui.MaybePrintTip(cfg.AreTipsEnabled())
+
+	// Record run in history
+	historyPath := config.HistoryPathForConfig(configPath)
+	trigger := "manual"
+	if os.Getenv("CASTOR_SCHEDULED") == "1" {
+		trigger = "scheduled"
+	}
+	runRecord := config.RunRecord{
+		StartedAt:      runStarted,
+		FinishedAt:     time.Now().UTC(),
+		Trigger:        trigger,
+		TargetsTotal:   len(targetsToProcess),
+		TargetsSynced:  len(changedTargetNames),
+		TargetsSkipped: len(targetsToProcess) - len(changedTargetNames),
+		TargetsFailed:  0,
+		BytesStreamed:  totalTransferred,
+		Status:         "success",
+	}
+	_ = config.AppendRun(historyPath, runRecord)
+
 	return nil
 }
 
-func stringsTrim(s string) string {
-	return filepath.Clean(s)
+func resolveTargetDestinations(target config.TargetConfig, cfg *config.Config) string {
+	if len(target.Destinations) > 0 {
+		return strings.Join(target.Destinations, ", ")
+	}
+	var names []string
+	for _, d := range cfg.Destinations {
+		names = append(names, d.Name)
+	}
+	if len(names) == 0 {
+		return "none"
+	}
+	return strings.Join(names, ", ")
+}
+
+func targetActiveDestinationNames(target config.TargetConfig, cfg *config.Config) []string {
+	if len(target.Destinations) > 0 {
+		return target.Destinations
+	}
+	var names []string
+	for _, d := range cfg.Destinations {
+		names = append(names, d.Name)
+	}
+	return names
 }

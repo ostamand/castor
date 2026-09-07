@@ -7,6 +7,8 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+
+	"github.com/ostamand/castor/internal/config"
 )
 
 func TestCopyWithBoundNormal(t *testing.T) {
@@ -165,5 +167,46 @@ func TestTarIntegrityWithShiftingFiles(t *testing.T) {
 
 	if entriesRead != 3 {
 		t.Errorf("expected 3 entries read, got %d", entriesRead)
+	}
+}
+
+func TestEstimateTargetSize(t *testing.T) {
+	tmpDir := t.TempDir()
+
+	// 1. Regular file (included): 200 bytes
+	regularFile := filepath.Join(tmpDir, "app.go")
+	regularData := make([]byte, 200)
+	if err := os.WriteFile(regularFile, regularData, 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	// 2. Excluded directory (node_modules): 800 bytes
+	nodeModulesDir := filepath.Join(tmpDir, "node_modules", "pkg")
+	if err := os.MkdirAll(nodeModulesDir, 0755); err != nil {
+		t.Fatal(err)
+	}
+	junkFile := filepath.Join(nodeModulesDir, "junk.js")
+	junkData := make([]byte, 800)
+	if err := os.WriteFile(junkFile, junkData, 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	cfg := config.DefaultConfig()
+	target := config.TargetConfig{
+		Name: "test-app",
+		Path: tmpDir,
+		Type: "git",
+	}
+
+	est := EstimateTargetSize(target, cfg.Rules)
+
+	if est.TotalBytes != 1000 {
+		t.Errorf("expected TotalBytes 1000, got %d", est.TotalBytes)
+	}
+	if est.PackagedBytes != 200 {
+		t.Errorf("expected PackagedBytes 200, got %d", est.PackagedBytes)
+	}
+	if est.ExcludedBytes != 800 {
+		t.Errorf("expected ExcludedBytes 800, got %d", est.ExcludedBytes)
 	}
 }

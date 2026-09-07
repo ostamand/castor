@@ -39,7 +39,14 @@ var authLogoutCmd = &cobra.Command{
 	RunE:  runAuthLogout,
 }
 
+var (
+	authLoginGDrive bool
+	authLoginGCS    bool
+)
+
 func init() {
+	authLoginCmd.Flags().BoolVar(&authLoginGDrive, "gdrive", false, "Authenticate for Google Drive only")
+	authLoginCmd.Flags().BoolVar(&authLoginGCS, "gcs", false, "Authenticate for Google Cloud Storage only")
 	authCmd.AddCommand(authLoginCmd)
 	authCmd.AddCommand(authStatusCmd)
 	authCmd.AddCommand(authLogoutCmd)
@@ -48,10 +55,51 @@ func init() {
 func runAuthLogin(cmd *cobra.Command, args []string) error {
 	ctx := context.Background()
 
-	fmt.Println("🦫 Castor · Google OAuth 2.0 Loopback Authentication")
-	fmt.Printf("Opening browser to authorize GCS and Google Drive scopes...\n\n")
+	var scopes []string
+	if authLoginGDrive {
+		scopes = append(scopes, auth.ScopeGDrive)
+	}
+	if authLoginGCS {
+		scopes = append(scopes, auth.ScopeGCS)
+	}
 
-	_, err := auth.Login(ctx)
+	// If no flags were passed, inspect config.toml
+	if len(scopes) == 0 {
+		cfgPath := config.DefaultConfigPath()
+		if cfg, err := config.LoadConfig(cfgPath); err == nil {
+			hasGCS := false
+			hasGDrive := false
+			for _, dest := range cfg.Destinations {
+				if dest.Provider == "gcs" {
+					hasGCS = true
+				} else if dest.Provider == "gdrive" {
+					hasGDrive = true
+				}
+			}
+			if hasGDrive {
+				scopes = append(scopes, auth.ScopeGDrive)
+			}
+			if hasGCS {
+				scopes = append(scopes, auth.ScopeGCS)
+			}
+		}
+	}
+
+	// If still empty (e.g. no config or no Google destinations configured), default to Google Drive
+	if len(scopes) == 0 {
+		scopes = append(scopes, auth.ScopeGDrive)
+	}
+
+	fmt.Println("🦫 Castor · Google OAuth 2.0 Loopback Authentication")
+	if len(scopes) == 1 && scopes[0] == auth.ScopeGDrive {
+		fmt.Printf("Opening browser to authorize Google Drive (%s)...\n\n", auth.ScopeGDrive)
+	} else if len(scopes) == 1 && scopes[0] == auth.ScopeGCS {
+		fmt.Printf("Opening browser to authorize Google Cloud Storage (%s)...\n\n", auth.ScopeGCS)
+	} else {
+		fmt.Printf("Opening browser to authorize Google Cloud Storage and Google Drive...\n\n")
+	}
+
+	_, err := auth.Login(ctx, scopes...)
 	if err != nil {
 		return err
 	}

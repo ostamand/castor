@@ -63,7 +63,7 @@ func TestInspectAndCatArchive(t *testing.T) {
 		Targets: []config.TargetConfig{targetCfg},
 	}
 
-	canonicalKey := config.CanonicalCloudKey("workstation", srcDir, "")
+	canonicalKey := config.CanonicalCloudKey("workstation", targetCfg.Name)
 	providers := map[string]storage.Provider{"mem": memProv}
 
 	// 4. Run StreamArchive into memProv

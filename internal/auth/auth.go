@@ -18,15 +18,39 @@ import (
 	"google.golang.org/api/option"
 )
 
+// Scope constants for Google APIs
+const (
+	ScopeGCS    = "https://www.googleapis.com/auth/devstorage.read_write"
+	ScopeGDrive = "https://www.googleapis.com/auth/drive.file"
+)
+
+// Default Google OAuth client credentials for Castor desktop CLI.
+// Can be injected at compile time via -ldflags:
+//   -X github.com/ostamand/castor/internal/auth.defaultClientID=...
+//   -X github.com/ostamand/castor/internal/auth.defaultClientSecret=...
+var (
+	defaultClientID     string
+	defaultClientSecret string
+)
+
 // OAuthConfig defines the default OAuth client for Castor desktop CLI
 var OAuthConfig = &oauth2.Config{
-	ClientID:     "32555940559.apps.googleusercontent.com", // Public standard desktop client
-	ClientSecret: "GOCSPX-7fE0iH7Wl_Qf5Rz6e1M9V8g7",
+	ClientID:     defaultClientID,
+	ClientSecret: defaultClientSecret,
 	Scopes: []string{
-		"https://www.googleapis.com/auth/devstorage.read_write",
-		"https://www.googleapis.com/auth/drive.file",
+		ScopeGCS,
+		ScopeGDrive,
 	},
 	Endpoint: google.Endpoint,
+}
+
+func init() {
+	if cid := os.Getenv("CASTOR_GOOGLE_CLIENT_ID"); cid != "" {
+		OAuthConfig.ClientID = cid
+	}
+	if csec := os.Getenv("CASTOR_GOOGLE_CLIENT_SECRET"); csec != "" {
+		OAuthConfig.ClientSecret = csec
+	}
 }
 
 // HasValidCredentials checks if stored Google credentials exist
@@ -93,7 +117,11 @@ func OpenBrowser(url string) {
 }
 
 // Login runs the browser-based OAuth 2.0 loopback authentication flow
-func Login(ctx context.Context) (*oauth2.Token, error) {
+func Login(ctx context.Context, scopes ...string) (*oauth2.Token, error) {
+	if OAuthConfig.ClientID == "" || OAuthConfig.ClientSecret == "" {
+		return nil, fmt.Errorf("Google OAuth credentials not configured: set CASTOR_GOOGLE_CLIENT_ID and CASTOR_GOOGLE_CLIENT_SECRET environment variables or build with -ldflags")
+	}
+
 	listener, err := net.Listen("tcp", "127.0.0.1:0")
 	if err != nil {
 		return nil, fmt.Errorf("failed to start local loopback listener: %w", err)
@@ -104,6 +132,9 @@ func Login(ctx context.Context) (*oauth2.Token, error) {
 	redirectURL := fmt.Sprintf("http://127.0.0.1:%d/callback", port)
 
 	conf := *OAuthConfig
+	if len(scopes) > 0 {
+		conf.Scopes = scopes
+	}
 	conf.RedirectURL = redirectURL
 
 	authURL := conf.AuthCodeURL("castor-state", oauth2.AccessTypeOffline, oauth2.ApprovalForce)

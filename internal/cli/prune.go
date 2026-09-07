@@ -23,6 +23,9 @@ var pruneCmd = &cobra.Command{
 	Aliases: []string{"gc"},
 	Short:   "Interactively remove cloud archives no longer registered in config.toml",
 	Long:    "Discovers orphaned remote archives that were removed from config.toml and safely garbage-collects them.",
+	Example: `  castor prune
+  castor prune -n
+  castor prune -y`,
 	RunE:    runPrune,
 }
 
@@ -47,7 +50,8 @@ func runPrune(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("failed to load configuration: %w", err)
 	}
 
-	state, err := config.LoadState(config.DefaultStatePath())
+	statePath := config.StatePathForConfig(configPath)
+	state, err := config.LoadState(statePath)
 	if err != nil {
 		return fmt.Errorf("failed to load state: %w", err)
 	}
@@ -59,7 +63,7 @@ func runPrune(cmd *cobra.Command, args []string) error {
 	// Active targets set
 	validKeys := make(map[string]bool)
 	for _, t := range cfg.Targets {
-		key := config.CanonicalCloudKey(cfg.Namespace, t.Path, t.Namespace)
+		key := config.CanonicalCloudKey(cfg.Namespace, t.Name)
 		validKeys[key] = true
 	}
 
@@ -161,7 +165,7 @@ func runPrune(cmd *cobra.Command, args []string) error {
 		deletedCount++
 	}
 
-	_ = config.SaveState(config.DefaultStatePath(), state)
+	_ = config.SaveState(statePath, state)
 
 	fmt.Println()
 	fmt.Println(lipgloss.NewStyle().Foreground(tui.ColorSuccess).Bold(true).Render(

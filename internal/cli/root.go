@@ -14,7 +14,7 @@ var (
 	noTUI   bool
 )
 
-const version = "0.4.0"
+var version = "0.1.0"
 
 // RootCmd is the primary CLI command for Castor
 var RootCmd = &cobra.Command{
@@ -36,6 +36,7 @@ func init() {
 
 	RootCmd.AddCommand(initCmd)
 	RootCmd.AddCommand(addCmd)
+	RootCmd.AddCommand(removeCmd)
 	RootCmd.AddCommand(pushCmd)
 	RootCmd.AddCommand(pullCmd)
 	RootCmd.AddCommand(lsCmd)
@@ -50,6 +51,9 @@ func init() {
 	RootCmd.AddCommand(doctorCmd)
 	RootCmd.AddCommand(upgradeCmd)
 	RootCmd.AddCommand(uninstallCmd)
+	RootCmd.AddCommand(configCmd)
+	RootCmd.AddCommand(mvCmd)
+	RootCmd.AddCommand(destinationCmd)
 }
 
 // Execute runs the root command

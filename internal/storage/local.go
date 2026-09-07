@@ -43,7 +43,7 @@ func (l *LocalProvider) Type() string {
 
 func (l *LocalProvider) resolvePath(objectName string) string {
 	clean := strings.TrimPrefix(objectName, "archives/")
-	return filepath.Join(l.basePath, "archives", clean)
+	return filepath.Join(l.basePath, clean)
 }
 
 func (l *LocalProvider) NewWriter(ctx context.Context, objectName string) (io.WriteCloser, error) {
@@ -61,8 +61,9 @@ func (l *LocalProvider) NewWriter(ctx context.Context, objectName string) (io.Wr
 func (l *LocalProvider) NewReader(ctx context.Context, objectName string) (io.ReadCloser, error) {
 	target := l.resolvePath(objectName)
 	if _, err := os.Stat(target); os.IsNotExist(err) {
-		// Fallback without archives/ subfolder
-		alt := filepath.Join(l.basePath, objectName)
+		// Fallback with legacy archives/ subfolder if exists
+		clean := strings.TrimPrefix(objectName, "archives/")
+		alt := filepath.Join(l.basePath, "archives", clean)
 		if _, err := os.Stat(alt); err == nil {
 			target = alt
 		} else {
@@ -73,30 +74,30 @@ func (l *LocalProvider) NewReader(ctx context.Context, objectName string) (io.Re
 }
 
 func (l *LocalProvider) List(ctx context.Context, prefix string) ([]ObjectInfo, error) {
-	archivesDir := filepath.Join(l.basePath, "archives")
-	if _, err := os.Stat(archivesDir); os.IsNotExist(err) {
+	if _, err := os.Stat(l.basePath); os.IsNotExist(err) {
 		return nil, nil
 	}
 
 	cleanPrefix := filepath.ToSlash(strings.TrimPrefix(prefix, "archives/"))
 	var result []ObjectInfo
 
-	err := filepath.WalkDir(archivesDir, func(p string, d fs.DirEntry, err error) error {
+	err := filepath.WalkDir(l.basePath, func(p string, d fs.DirEntry, err error) error {
 		if err != nil || d.IsDir() {
 			return nil
 		}
-		rel, err := filepath.Rel(archivesDir, p)
+		rel, err := filepath.Rel(l.basePath, p)
 		if err != nil {
 			return nil
 		}
 		slashRel := filepath.ToSlash(rel)
-		if cleanPrefix == "" || strings.HasPrefix(slashRel, cleanPrefix) {
+		normRel := strings.TrimPrefix(slashRel, "archives/")
+		if cleanPrefix == "" || strings.HasPrefix(normRel, cleanPrefix) || strings.HasPrefix(slashRel, cleanPrefix) {
 			info, err := d.Info()
 			if err != nil {
 				return nil
 			}
 			result = append(result, ObjectInfo{
-				Name:         "archives/" + slashRel,
+				Name:         normRel,
 				Size:         info.Size(),
 				Updated:      info.ModTime(),
 				StorageClass: "LOCAL",
@@ -112,7 +113,12 @@ func (l *LocalProvider) Delete(ctx context.Context, objectName string) error {
 	target := l.resolvePath(objectName)
 	err := os.Remove(target)
 	if os.IsNotExist(err) {
-		return nil
+		clean := strings.TrimPrefix(objectName, "archives/")
+		alt := filepath.Join(l.basePath, "archives", clean)
+		err = os.Remove(alt)
+		if os.IsNotExist(err) {
+			return nil
+		}
 	}
 	return err
 }

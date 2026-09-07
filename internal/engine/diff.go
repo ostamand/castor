@@ -60,7 +60,7 @@ func CompareTargetWithRemote(
 	namespace string,
 	secretKey string,
 ) (*TargetDiff, error) {
-	canonicalKey := config.CanonicalCloudKey(namespace, target.Path, target.Namespace)
+	canonicalKey := config.CanonicalCloudKey(namespace, target.Name)
 	targetPath := sysinfo.ExpandHome(target.Path)
 
 	diff := &TargetDiff{

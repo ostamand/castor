@@ -6,7 +6,7 @@ INSTALL_PATH ?= $(PREFIX)/bin
 SKILLS_SRC := $(CURDIR)/skills
 SKILLS_DEST := $(HOME)/.gemini/config/skills
 
-.PHONY: all build test clean install install-skills uninstall-skills uninstall uninstall-all tidy fmt lint
+.PHONY: all build test clean dist install install-skills uninstall-skills uninstall uninstall-all tidy fmt lint
 
 all: build
 
@@ -16,6 +16,16 @@ build:
 test:
 	go test -v -race ./...
 
+dist: test
+	@mkdir -p dist
+	CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -trimpath -ldflags="-s -w" -o dist/castor-linux-amd64 $(CMD_PATH)
+	CGO_ENABLED=0 GOOS=linux GOARCH=arm64 go build -trimpath -ldflags="-s -w" -o dist/castor-linux-arm64 $(CMD_PATH)
+	CGO_ENABLED=0 GOOS=darwin GOARCH=arm64 go build -trimpath -ldflags="-s -w" -o dist/castor-darwin-arm64 $(CMD_PATH)
+	CGO_ENABLED=0 GOOS=darwin GOARCH=amd64 go build -trimpath -ldflags="-s -w" -o dist/castor-darwin-amd64 $(CMD_PATH)
+	@cd dist && sha256sum castor-* > checksums.txt
+	@echo "✔ Compiled release assets in dist/:"
+	@ls -lh dist/
+
 tidy:
 	go mod tidy
 
@@ -23,7 +33,7 @@ fmt:
 	go fmt ./...
 
 clean:
-	rm -rf bin/
+	rm -rf bin/ dist/
 
 install-skills:
 	@mkdir -p $(SKILLS_DEST)

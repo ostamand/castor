@@ -3,6 +3,7 @@ package cli
 import (
 	"context"
 	"fmt"
+	"path"
 	"strings"
 
 	"github.com/ostamand/castor/internal/config"
@@ -23,6 +24,9 @@ var lsCmd = &cobra.Command{
 	Aliases: []string{"list"},
 	Short:   "List cloud archives, sizes, and backup dates",
 	Long:    "Displays all backed-up project archives across your cloud destinations.",
+	Example: `  castor ls
+  castor ls --dest google-drive
+  castor ls --all-namespaces`,
 	RunE:    runLs,
 }
 
@@ -95,21 +99,35 @@ func runLs(cmd *cobra.Command, args []string) error {
 			continue // Hide raw sidecars from primary listing
 		}
 
-		cleanName := strings.TrimPrefix(obj.Name, "archives/")
+		cleanKey := config.CleanArchiveKey(obj.Name)
+		targetName := path.Base(cleanKey)
+		for _, t := range cfg.Targets {
+			tKey := config.CanonicalCloudKey(cfg.Namespace, t.Name)
+			if tKey == cleanKey || (t.Name != "" && t.Name == targetName) {
+				if t.Name != "" {
+					targetName = t.Name
+				}
+				break
+			}
+		}
+
 		tier := obj.StorageClass
 		if tier == "" {
 			tier = "STANDARD"
 		}
 
 		rows = append(rows, []string{
-			cleanName,
+			targetName,
+			cleanKey,
 			tui.FormatBytes(obj.Size),
 			obj.Updated.Format("2006-01-02 15:04"),
 			tier,
 		})
 
 		items = append(items, tui.ArchiveItem{
-			CanonicalKey: cleanName,
+			CanonicalKey: cleanKey,
+			ArchiveName:  targetName,
+			Namespace:    cfg.Namespace,
 			Size:         obj.Size,
 			Updated:      obj.Updated,
 			Status:       "Healthy",
@@ -122,7 +140,7 @@ func runLs(cmd *cobra.Command, args []string) error {
 	}
 
 	fmt.Printf("🦫 Castor · Archives in '%s' (%d archives):\n\n", dest.Name, len(rows))
-	table := tui.RenderTable([]string{"Archive Key", "Size", "Last Pushed (UTC)", "Storage Tier"}, rows)
+	table := tui.RenderTable([]string{"Target", "Cloud Key", "Size", "Last Pushed (UTC)", "Storage Tier"}, rows)
 	fmt.Println(table)
 
 	return nil

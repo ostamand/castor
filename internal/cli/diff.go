@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"path/filepath"
 	"strings"
 
 	"github.com/charmbracelet/lipgloss"
@@ -30,6 +31,9 @@ var diffCmd = &cobra.Command{
 in milliseconds without downloading or extracting full archives.
 
 Shows commit distance, branch status, and uncommitted edits.`,
+	Example: `  castor diff
+  castor diff myproject
+  castor diff --json`,
 	RunE: runDiff,
 }
 
@@ -107,7 +111,7 @@ func runDiff(cmd *cobra.Command, args []string) error {
 		nameOrPath := args[0]
 		found := false
 		for _, t := range cfg.Targets {
-			if t.Name == nameOrPath || t.Path == nameOrPath {
+			if t.Name == nameOrPath || t.Path == nameOrPath || filepath.Base(t.Name) == nameOrPath || strings.HasSuffix(t.Name, "/"+nameOrPath) {
 				targetsToDiff = append(targetsToDiff, t)
 				found = true
 				break

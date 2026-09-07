@@ -72,7 +72,7 @@ func GenerateSystemdUnits(castorBinaryPath string) error {
 	}
 
 	serviceContent := fmt.Sprintf(`[Unit]
-Description=Castor Cold-Storage Vault Archiver
+Description=Castor Cold-Storage Archiver
 ConditionACPower=true
 After=network-online.target
 
@@ -86,7 +86,7 @@ StandardError=journal
 `, castorBinaryPath)
 
 	timerContent := `[Unit]
-Description=Run Castor Archiver Nightly
+Description=Run Castor Archiver on Schedule
 
 [Timer]
 OnCalendar=*-*-* 03:00:00

@@ -29,6 +29,9 @@ var inspectCmd = &cobra.Command{
 	Short:   "Inspect the contents of a remote archive in-memory",
 	Long: `Decompresses and decrypts the remote archive stream directly in memory,
 listing all archived files, permissions, sizes, and timestamps without extracting to disk.`,
+	Example: `  castor inspect myproject
+  castor inspect myproject -p '*.go'
+  castor inspect myproject --json`,
 	Args: cobra.ExactArgs(1),
 	RunE: runInspect,
 }

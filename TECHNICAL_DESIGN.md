@@ -3,7 +3,7 @@
 **Project Name:** Castor (`castor`)  
 **Mascot & Theme:** *Castor canadensis* (The beaver — nature’s engineer, lodge builder, and winter cache architect)  
 **Binary Class:** Standalone CLI tool written in Go  
-**Specification Version:** `0.4.0-spec`  
+**Specification Version:** `0.1.0-spec`  
 **License Target:** MIT / Apache-2.0  
 
 ---
@@ -471,7 +471,7 @@ excludes = [".cache", "tmp", "temp", "*.tmp", ".DS_Store", "Thumbs.db"]
 ## 9. Operational Lifecycle & Automation
 
 ### 9.1 Systemd User Service & Timer
-On Linux, Castor provides automated nightly runs via systemd user units:
+On Linux, Castor provides automated scheduled runs via systemd user units:
 
 `~/.config/systemd/user/castor.service`:
 ```ini
@@ -490,7 +490,7 @@ IOSchedulingClass=idle
 `~/.config/systemd/user/castor.timer`:
 ```ini
 [Unit]
-Description=Run Castor Archiver Nightly
+Description=Run Castor Archiver on Schedule
 
 [Timer]
 OnCalendar=*-*-* 03:00:00
@@ -504,7 +504,7 @@ WantedBy=timers.target
 ### 9.2 Desktop Failure Notifications
 When running as a systemd user service or cron job on Linux, Castor can send desktop alerts via `libnotify` (`notify-send`) if a backup run encounters an error:
 ```bash
-notify-send -u critical -i dialog-warning "🦫 Castor Backup Alert" "Nightly backup failed for target 'user/projects/rollmind'. Run 'castor status' for details."
+notify-send -u critical -i dialog-warning "🦫 Castor Backup Alert" "Scheduled backup failed for target 'user/projects/rollmind'. Run 'castor status' for details."
 ```
 
 ---

@@ -14,12 +14,13 @@ import (
 
 // TargetProgress tracks streaming status of an individual target
 type TargetProgress struct {
-	Name         string
+	Name          string
+	Destinations  string
 	BytesStreamed int64
-	TotalBytes   int64
+	TotalBytes    int64
 	SpeedBytesSec float64
-	Done         bool
-	Error        error
+	Done          bool
+	Error         error
 }
 
 type dashboardModel struct {
@@ -36,6 +37,7 @@ type LiveDashboard struct {
 	model *dashboardModel
 	prog  *tea.Program
 	isTTY bool
+	dests map[string]string
 }
 
 type progressUpdateMsg struct {
@@ -46,15 +48,25 @@ type progressUpdateMsg struct {
 }
 
 // NewLiveDashboard initializes the live push dashboard
-func NewLiveDashboard(targetNames []string) *LiveDashboard {
+func NewLiveDashboard(targetNames []string, targetTotals map[string]int64, targetDests map[string]string) *LiveDashboard {
 	if !IsTTY() {
-		return &LiveDashboard{isTTY: false}
+		return &LiveDashboard{isTTY: false, dests: targetDests}
 	}
 
 	targetsMap := make(map[string]*TargetProgress)
 	for _, name := range targetNames {
+		var total int64
+		if targetTotals != nil {
+			total = targetTotals[name]
+		}
+		var dests string
+		if targetDests != nil {
+			dests = targetDests[name]
+		}
 		targetsMap[name] = &TargetProgress{
-			Name: name,
+			Name:         name,
+			Destinations: dests,
+			TotalBytes:   total,
 		}
 	}
 
@@ -84,6 +96,7 @@ func NewLiveDashboard(targetNames []string) *LiveDashboard {
 		model: m,
 		prog:  p,
 		isTTY: true,
+		dests: targetDests,
 	}
 }
 
@@ -91,10 +104,14 @@ func NewLiveDashboard(targetNames []string) *LiveDashboard {
 func (ld *LiveDashboard) Update(name string, bytesStreamed int64, done bool, err error) {
 	if !ld.isTTY {
 		if done {
+			destDesc := ""
+			if ld.dests != nil && ld.dests[name] != "" {
+				destDesc = fmt.Sprintf(" [%s]", ld.dests[name])
+			}
 			if err != nil {
-				fmt.Printf("✖ %s: failed: %v\n", name, err)
+				fmt.Printf("✖ %s%s: failed: %v\n", name, destDesc, err)
 			} else {
-				fmt.Printf("✔ %s: synced %s\n", name, FormatBytes(bytesStreamed))
+				fmt.Printf("✔ %s%s: synced %s\n", name, destDesc, FormatBytes(bytesStreamed))
 			}
 		}
 		return
@@ -153,7 +170,7 @@ func (m *dashboardModel) View() string {
 	defer m.mu.Unlock()
 
 	var sb strings.Builder
-	sb.WriteString(StyleTitle.Render("🦫 Castor · Streaming Targets to Cloud Vault") + "\n\n")
+	sb.WriteString(StyleTitle.Render("🦫 Castor · Streaming Targets") + "\n\n")
 
 	for _, name := range m.order {
 		t := m.targets[name]
@@ -161,8 +178,18 @@ func (m *dashboardModel) View() string {
 			continue
 		}
 
+		destStr := ""
+		if t.Destinations != "" {
+			destStr = lipgloss.NewStyle().Foreground(ColorHighlight).Render("→ " + t.Destinations)
+		}
+
 		statusIcon := m.spinner.View()
-		detail := StyleDim.Render(fmt.Sprintf("%s streamed", FormatBytes(t.BytesStreamed)))
+		var detail string
+		if t.TotalBytes > 0 {
+			detail = StyleDim.Render(fmt.Sprintf("%s / %s streamed", FormatBytes(t.BytesStreamed), FormatBytes(t.TotalBytes)))
+		} else {
+			detail = StyleDim.Render(fmt.Sprintf("%s streamed", FormatBytes(t.BytesStreamed)))
+		}
 
 		if t.Done {
 			if t.Error != nil {
@@ -174,7 +201,7 @@ func (m *dashboardModel) View() string {
 			}
 		}
 
-		line := fmt.Sprintf("  %s %-32s %s\n", statusIcon, name, detail)
+		line := fmt.Sprintf("  %s %-30s %-26s %s\n", statusIcon, name, destStr, detail)
 		sb.WriteString(line)
 	}
 

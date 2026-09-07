@@ -260,3 +260,124 @@ func zeroPad(dst io.Writer, count int64) (int64, error) {
 	}
 	return written, nil
 }
+
+// TargetSizeEstimate holds disk and packaging size metrics for a target
+type TargetSizeEstimate struct {
+	TotalBytes    int64 // Total raw bytes on disk
+	PackagedBytes int64 // Bytes that will be included in the archive (after exclusions)
+	ExcludedBytes int64 // Bytes filtered out by exclusion rules and ignored folders
+}
+
+// EstimateTargetSize calculates the on-disk raw, packaged, and excluded bytes according to rules
+func EstimateTargetSize(target config.TargetConfig, rules config.RulesConfig) TargetSizeEstimate {
+	targetPath := sysinfo.ExpandHome(target.Path)
+
+	var excludes []string
+	switch target.Type {
+	case "git":
+		excludes = rules.Git.Excludes
+	case "documents":
+		excludes = rules.Documents.Excludes
+	case "media":
+		excludes = rules.Media.Excludes
+	default:
+		excludes = rules.Generic.Excludes
+	}
+
+	var est TargetSizeEstimate
+
+	_ = filepath.WalkDir(targetPath, func(p string, d fs.DirEntry, err error) error {
+		if err != nil || p == targetPath {
+			return nil
+		}
+
+		rel, err := filepath.Rel(targetPath, p)
+		if err != nil || rel == "." {
+			return nil
+		}
+
+		name := d.Name()
+
+		// If git repo, handle .git specially
+		if target.Type == "git" && (name == ".git" || strings.HasPrefix(rel, ".git"+string(filepath.Separator))) {
+			if d.IsDir() {
+				bundleEst := estimateGitBundleBytes(p)
+				gitTotal := dirTotalBytes(p)
+				est.TotalBytes += gitTotal
+				if target.CreateGitBundle {
+					est.PackagedBytes += bundleEst
+					excluded := gitTotal - bundleEst
+					if excluded < 0 {
+						excluded = 0
+					}
+					est.ExcludedBytes += excluded
+				} else {
+					est.ExcludedBytes += gitTotal
+				}
+				return filepath.SkipDir
+			}
+			return nil
+		}
+
+		// Check exclusion patterns
+		isExcluded := false
+		for _, ex := range excludes {
+			if matched, _ := filepath.Match(ex, name); matched {
+				isExcluded = true
+				break
+			}
+			if strings.Contains(rel, ex) {
+				isExcluded = true
+				break
+			}
+		}
+
+		if isExcluded {
+			if d.IsDir() {
+				dirSize := dirTotalBytes(p)
+				est.TotalBytes += dirSize
+				est.ExcludedBytes += dirSize
+				return filepath.SkipDir
+			}
+			if fi, err := d.Info(); err == nil {
+				est.TotalBytes += fi.Size()
+				est.ExcludedBytes += fi.Size()
+			}
+			return nil
+		}
+
+		// Included entry
+		if !d.IsDir() {
+			if fi, err := d.Info(); err == nil {
+				est.TotalBytes += fi.Size()
+				est.PackagedBytes += fi.Size()
+			}
+		}
+
+		return nil
+	})
+
+	return est
+}
+
+func dirTotalBytes(dirPath string) int64 {
+	var total int64
+	_ = filepath.WalkDir(dirPath, func(_ string, d fs.DirEntry, err error) error {
+		if err != nil || d.IsDir() {
+			return nil
+		}
+		if fi, err := d.Info(); err == nil {
+			total += fi.Size()
+		}
+		return nil
+	})
+	return total
+}
+
+func estimateGitBundleBytes(gitDirPath string) int64 {
+	objectsDir := filepath.Join(gitDirPath, "objects")
+	if _, err := os.Stat(objectsDir); err == nil {
+		return dirTotalBytes(objectsDir)
+	}
+	return dirTotalBytes(gitDirPath)
+}

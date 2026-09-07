@@ -1,6 +1,8 @@
 # Binaries
 bin/
 dist/
+castor
+/castor
 
 # Test artifacts
 *.test

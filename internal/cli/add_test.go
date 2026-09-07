@@ -240,3 +240,108 @@ func TestAddSingleTargetLifecycle(t *testing.T) {
 		t.Errorf("expected duplicate target error when re-adding, got nil")
 	}
 }
+
+func TestScanDirectoryDefaultPrefix(t *testing.T) {
+	tmp := t.TempDir()
+
+	// Initialize config
+	cfgPath = filepath.Join(tmp, "config.toml")
+	defer func() {
+		cfgPath = ""
+		addScan = false
+		addRecursive = false
+		addYes = false
+		addPrefix = ""
+	}()
+
+	initCfg := config.DefaultConfig()
+	initCfg.Namespace = "test-box"
+	initCfg.Security.Encrypt = false
+	if err := config.SaveConfig(cfgPath, initCfg); err != nil {
+		t.Fatalf("failed saving test config: %v", err)
+	}
+
+	// Create ~/Work/git-like structure
+	gitParent := filepath.Join(tmp, "git")
+	repo1 := filepath.Join(gitParent, "cadence-agent")
+	_ = os.MkdirAll(filepath.Join(repo1, ".git"), 0755)
+	_ = os.WriteFile(filepath.Join(repo1, "main.go"), []byte("package main"), 0644)
+
+	repo2 := filepath.Join(gitParent, "castor")
+	_ = os.MkdirAll(filepath.Join(repo2, ".git"), 0755)
+
+	addScan = true
+	addRecursive = false
+	addYes = true
+	addPrefix = ""
+	addGitOnly = false
+	addDryRun = false
+	addMaxDepth = 2
+
+	if err := runAdd(nil, []string{gitParent}); err != nil {
+		t.Fatalf("runAdd with --scan failed: %v", err)
+	}
+
+	cfg, err := config.LoadConfig(cfgPath)
+	if err != nil {
+		t.Fatalf("failed reloading config: %v", err)
+	}
+
+	if len(cfg.Targets) != 2 {
+		t.Fatalf("expected 2 targets, got %d", len(cfg.Targets))
+	}
+
+	names := map[string]bool{}
+	for _, t := range cfg.Targets {
+		names[t.Name] = true
+	}
+
+	if !names["git/cadence-agent"] {
+		t.Errorf("expected target 'git/cadence-agent', got targets: %v", names)
+	}
+	if !names["git/castor"] {
+		t.Errorf("expected target 'git/castor', got targets: %v", names)
+	}
+}
+
+func TestAddPrefixWithoutTrailingSlash(t *testing.T) {
+	tmp := t.TempDir()
+	cfgPath = filepath.Join(tmp, "config.toml")
+	defer func() {
+		cfgPath = ""
+		addPrefix = ""
+	}()
+
+	initCfg := config.DefaultConfig()
+	initCfg.Namespace = "test-box"
+	initCfg.Security.Encrypt = false
+	if err := config.SaveConfig(cfgPath, initCfg); err != nil {
+		t.Fatalf("failed saving test config: %v", err)
+	}
+
+	repo := filepath.Join(tmp, "my-app")
+	_ = os.MkdirAll(filepath.Join(repo, ".git"), 0755)
+
+	addPrefix = "custom" // NO trailing slash
+	addScan = false
+	addRecursive = false
+
+	if err := runAdd(nil, []string{repo}); err != nil {
+		t.Fatalf("runAdd failed: %v", err)
+	}
+
+	cfg, err := config.LoadConfig(cfgPath)
+	if err != nil {
+		t.Fatalf("failed reloading config: %v", err)
+	}
+
+	if len(cfg.Targets) != 1 {
+		t.Fatalf("expected 1 target, got %d", len(cfg.Targets))
+	}
+
+	if cfg.Targets[0].Name != "custom/my-app" {
+		t.Errorf("expected 'custom/my-app', got '%s'", cfg.Targets[0].Name)
+	}
+}
+
+

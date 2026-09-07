@@ -88,7 +88,11 @@ func runInit(cmd *cobra.Command, args []string) error {
 		cfg.Security.AgePublicKeys = []string{kp.PublicKey}
 		secretKey = kp.SecretKey
 	} else if formResult.ExistingPubKey != "" {
-		cfg.Security.AgePublicKeys = []string{formResult.ExistingPubKey}
+		pubKey, err := crypto.ParseRecipientOrIdentity(formResult.ExistingPubKey)
+		if err != nil {
+			return fmt.Errorf("invalid encryption key: %w", err)
+		}
+		cfg.Security.AgePublicKeys = []string{pubKey}
 	}
 
 	if err := config.SaveConfig(configPath, cfg); err != nil {
@@ -168,26 +172,53 @@ func runInit(cmd *cobra.Command, args []string) error {
 	}
 
 	if hasGoogleDest && !auth.HasValidCredentials() {
+		var scopes []string
+		hasGCS := false
+		hasGDrive := false
+		for _, p := range formResult.Providers {
+			if p == "gcs" {
+				hasGCS = true
+			} else if p == "gdrive" {
+				hasGDrive = true
+			}
+		}
+
+		if hasGDrive {
+			scopes = append(scopes, auth.ScopeGDrive)
+		}
+		if hasGCS {
+			scopes = append(scopes, auth.ScopeGCS)
+		}
+
+		authTarget := "Google"
+		if hasGDrive && !hasGCS {
+			authTarget = "Google Drive"
+		} else if hasGCS && !hasGDrive {
+			authTarget = "Google Cloud Storage"
+		}
+
 		fmt.Println()
 		loginNow, _ := tui.ConfirmPrompt(
-			"Connect Google Account",
-			"Castor needs permission to store archives in your Google account. Authenticate via browser now?",
+			"Connect "+authTarget,
+			fmt.Sprintf("Castor needs permission to store archives in %s. Authenticate via browser now?", authTarget),
 			true,
 		)
 		if loginNow {
-			fmt.Println("\n🦫 Opening browser to authenticate with Google...")
+			fmt.Printf("\n🦫 Opening browser to authenticate with %s...\n", authTarget)
 			authCtx, authCancel := context.WithTimeout(context.Background(), 3*time.Minute)
-			if _, err := auth.Login(authCtx); err != nil {
+			if _, err := auth.Login(authCtx, scopes...); err != nil {
 				fmt.Println(lipgloss.NewStyle().Foreground(tui.ColorWarning).Render(
 					fmt.Sprintf("⚠️  Authentication deferred (%v). You can log in later with 'castor auth login'.", err),
 				))
 			} else {
-				fmt.Println(lipgloss.NewStyle().Foreground(tui.ColorSuccess).Bold(true).Render("✔ Successfully authenticated with Google!"))
+				fmt.Println(lipgloss.NewStyle().Foreground(tui.ColorSuccess).Bold(true).Render(
+					fmt.Sprintf("✔ Successfully authenticated with %s!", authTarget),
+				))
 			}
 			authCancel()
 		} else {
 			fmt.Println(lipgloss.NewStyle().Foreground(tui.ColorWarning).Render(
-				"⚠️  Remember to run 'castor auth login' before backing up to Google Drive.",
+				fmt.Sprintf("⚠️  Remember to run 'castor auth login' before backing up to %s.", authTarget),
 			))
 		}
 	}

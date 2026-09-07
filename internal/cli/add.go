@@ -36,6 +36,10 @@ If the folder contains a .git repository, Castor automatically configures it wit
 (committed history, branch heads, stashes, and working tree).
 
 To discover and register multiple child projects within a parent directory, use -r or --scan.`,
+	Example: `  castor add ~/Work/git/myproject
+  castor add ~/Work/git/myproject --name work/myproject
+  castor add ~/Work --scan
+  castor add ~/Work -r --git-only`,
 	Args: cobra.ExactArgs(1),
 	RunE: runAdd,
 }
@@ -87,7 +91,11 @@ func runAdd(cmd *cobra.Command, args []string) error {
 	if !isScan || isGit {
 		targetName := addName
 		if targetName == "" {
-			targetName = addPrefix + filepath.Base(absPath)
+			prefix := addPrefix
+			if prefix != "" && !strings.HasSuffix(prefix, "/") {
+				prefix += "/"
+			}
+			targetName = prefix + config.NormalizeTargetName(filepath.Base(absPath))
 		}
 
 		targetType := addType
@@ -149,9 +157,25 @@ func runAdd(cmd *cobra.Command, args []string) error {
 		depth = 4
 	}
 
+	prefix := addPrefix
+	if prefix == "" && (cmd == nil || !cmd.Flags().Changed("prefix")) {
+		// When no explicit --prefix is passed, default prefix to the folder name being scanned (e.g. "git/").
+		// Exclude filesystem root ("/") or user home dir to avoid awkward prefixes.
+		home, _ := os.UserHomeDir()
+		cleanParent := filepath.Clean(absPath)
+		if cleanParent != "/" && (home == "" || cleanParent != filepath.Clean(home)) {
+			baseName := config.NormalizeTargetName(filepath.Base(cleanParent))
+			if baseName != "" && baseName != "." {
+				prefix = baseName + "/"
+			}
+		}
+	} else if prefix != "" && !strings.HasSuffix(prefix, "/") {
+		prefix += "/"
+	}
+
 	fmt.Printf("🦫 Castor · Scanning '%s' (namespace: %s, max-depth: %d)...\n", rawPath, cfg.Namespace, depth)
 
-	candidates, err := ScanDirectory(absPath, addRecursive, addGitOnly, depth, addPrefix, addType, cfg.Targets)
+	candidates, err := ScanDirectory(absPath, addRecursive, addGitOnly, depth, prefix, addType, cfg.Targets)
 	if err != nil {
 		return fmt.Errorf("discovery scan failed: %w", err)
 	}
@@ -323,7 +347,7 @@ func ScanDirectory(
 			targetType = "git"
 		}
 
-		targetName := prefix + name
+		targetName := prefix + config.NormalizeTargetName(name)
 		cleanCurrentPath := filepath.Clean(currentPath)
 		conflict := seenPaths[cleanCurrentPath] || seenNames[targetName]
 		conflictDetail := ""

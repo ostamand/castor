@@ -6,6 +6,7 @@ import (
 	"path/filepath"
 	"runtime"
 	"strings"
+	"unicode"
 
 	"github.com/ostamand/castor/internal/sysinfo"
 	"github.com/pelletier/go-toml/v2"
@@ -14,6 +15,7 @@ import (
 // Master configuration struct
 type Config struct {
 	Namespace    string              `toml:"namespace"`
+	ShowTips     *bool               `toml:"show_tips,omitempty"`
 	Performance  PerformanceConfig   `toml:"performance"`
 	Safety       SafetyConfig        `toml:"safety"`
 	Security     SecurityConfig      `toml:"security"`
@@ -82,6 +84,14 @@ func DefaultStatePath() string {
 	return filepath.Join(home, ".config", "castor", "state.json")
 }
 
+// StatePathForConfig returns state.json located alongside the given config.toml
+func StatePathForConfig(configPath string) string {
+	if configPath == "" {
+		return DefaultStatePath()
+	}
+	return filepath.Join(filepath.Dir(configPath), "state.json")
+}
+
 // DefaultCredentialsPath returns ~/.config/castor/credentials.json
 func DefaultCredentialsPath() string {
 	home, _ := os.UserHomeDir()
@@ -98,8 +108,10 @@ func DefaultConfig() *Config {
 		numCPU = 4
 	}
 
+	showTips := true
 	return &Config{
 		Namespace: host.DefaultNamespace,
+		ShowTips:  &showTips,
 		Performance: PerformanceConfig{
 			MaxWorkers:       numCPU,
 			CompressionLevel: 19, // Optimal zstd cold storage compression
@@ -134,6 +146,14 @@ func DefaultConfig() *Config {
 			},
 		},
 	}
+}
+
+// AreTipsEnabled returns whether educational tips should be shown
+func (c *Config) AreTipsEnabled() bool {
+	if c == nil || c.ShowTips == nil {
+		return true
+	}
+	return *c.ShowTips
 }
 
 // LoadConfig reads and parses the TOML config file
@@ -214,6 +234,7 @@ func (c *Config) Validate() error {
 
 	// Validate Targets
 	targetPaths := make(map[string]bool)
+	targetNames := make(map[string]bool)
 	for i := range c.Targets {
 		t := &c.Targets[i]
 		cleanPath := filepath.Clean(sysinfo.ExpandHome(t.Path))
@@ -224,6 +245,16 @@ func (c *Config) Validate() error {
 			return fmt.Errorf("duplicate target path '%s'", t.Path)
 		}
 		targetPaths[cleanPath] = true
+
+		// Auto-derive name from path basename if not set
+		if t.Name == "" {
+			t.Name = NormalizeTargetName(filepath.Base(cleanPath))
+		}
+
+		if targetNames[t.Name] {
+			return fmt.Errorf("duplicate target name '%s'", t.Name)
+		}
+		targetNames[t.Name] = true
 
 		if t.Type == "" {
 			t.Type = "generic"
@@ -252,4 +283,67 @@ func SaveConfig(path string, cfg *Config) error {
 	}
 
 	return os.WriteFile(path, data, 0644)
+}
+
+// NormalizeTargetName converts a raw directory name into kebab-case.
+// Forward slashes are preserved for hierarchical names (e.g. "work/MyProject" → "work/my-project").
+// Examples: "MyProject" → "my-project", "my_project" → "my-project",
+// "Generated Visions Workflows" → "generated-visions-workflows"
+func NormalizeTargetName(name string) string {
+	// Split on slashes, normalize each segment, rejoin
+	segments := strings.Split(name, "/")
+	var normalized []string
+	for _, seg := range segments {
+		seg = strings.TrimSpace(seg)
+		if seg == "" {
+			continue
+		}
+		normalized = append(normalized, normalizeSegment(seg))
+	}
+	return strings.Join(normalized, "/")
+}
+
+// normalizeSegment converts a single name segment to kebab-case
+func normalizeSegment(name string) string {
+	// Insert hyphens at CamelCase boundaries: "MyProject" → "My-Project"
+	var parts []rune
+	runes := []rune(name)
+	for i, r := range runes {
+		if i > 0 && unicode.IsUpper(r) {
+			prev := runes[i-1]
+			if unicode.IsLower(prev) || unicode.IsDigit(prev) {
+				parts = append(parts, '-')
+			} else if unicode.IsUpper(prev) && i+1 < len(runes) && unicode.IsLower(runes[i+1]) {
+				parts = append(parts, '-')
+			}
+		}
+		parts = append(parts, r)
+	}
+
+	s := string(parts)
+	s = strings.ToLower(s)
+
+	// Replace common separators with hyphens
+	s = strings.NewReplacer(
+		"_", "-",
+		" ", "-",
+		".", "-",
+	).Replace(s)
+
+	// Strip anything that isn't alphanumeric or hyphen
+	var clean []rune
+	for _, r := range s {
+		if unicode.IsLetter(r) || unicode.IsDigit(r) || r == '-' {
+			clean = append(clean, r)
+		}
+	}
+	s = string(clean)
+
+	// Collapse multiple hyphens and trim
+	for strings.Contains(s, "--") {
+		s = strings.ReplaceAll(s, "--", "-")
+	}
+	s = strings.Trim(s, "-")
+
+	return s
 }

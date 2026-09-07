@@ -33,14 +33,20 @@ var pullCmd = &cobra.Command{
 	Short:   "Decrypt and restore an archive from cloud storage",
 	Long: `Streams down, decrypts in memory, and unpacks an archive into your workspace.
 If the target is a Git repository, committed history, stashes, and working tree files are 100% reconstituted.`,
+	Example: `  castor pull myproject
+  castor pull myproject --to ~/restore
+  castor pull myproject --dest google-drive
+  castor pull myproject -k AGE-SECRET-KEY-1...`,
 	RunE: runPull,
 }
 
 func init() {
 	pullCmd.Flags().StringVarP(&pullNamespace, "namespace", "s", "", "Namespace to restore from (default: current namespace)")
-	pullCmd.Flags().StringVar(&pullToDir, "to", "", "Restore into a custom destination directory instead of original path")
+	pullCmd.Flags().StringVar(&pullToDir, "to", "", "Parent directory to restore into (e.g. --to ~/Work restores to ~/Work/<target>)")
+	pullCmd.Flags().StringVar(&pullToDir, "dir", "", "Alias for --to")
+	_ = pullCmd.Flags().MarkHidden("dir")
 	pullCmd.Flags().BoolVarP(&pullForce, "force", "f", false, "Overwrite existing destination files without prompt")
-	pullCmd.Flags().StringVar(&pullDest, "dest", "", "Specific destination provider to pull from (e.g. 'gcp-coldline')")
+	pullCmd.Flags().StringVar(&pullDest, "dest", "", "Cloud storage destination name from config (e.g. 'google-drive')")
 	pullCmd.Flags().StringVarP(&pullSecretKey, "key", "k", "", "Age private secret key (AGE-SECRET-KEY-1...) or set CASTOR_AGE_KEY")
 }
 
@@ -74,7 +80,10 @@ func runPull(cmd *cobra.Command, args []string) error {
 		}
 	}
 	if activeDest == nil {
-		return fmt.Errorf("destination '%s' not found in config", pullDest)
+		if strings.HasPrefix(pullDest, "/") || strings.HasPrefix(pullDest, "~") || strings.HasPrefix(pullDest, ".") {
+			return fmt.Errorf("'%s' is a local folder path, but '--dest' selects a cloud storage provider from config.toml (e.g. 'google-drive')\n💡 Use '--to %s' to specify the local restore directory", pullDest, pullDest)
+		}
+		return fmt.Errorf("cloud destination '%s' not found in config", pullDest)
 	}
 
 	prov, err := storage.NewProviderFromConfig(ctx, *activeDest)
@@ -132,10 +141,14 @@ func runPull(cmd *cobra.Command, args []string) error {
 
 	// Determine restore destination directory
 	destPath := pullToDir
-	if destPath == "" {
+	if destPath != "" {
+		// --to specifies a parent directory; append the target basename
+		destPath = sysinfo.ExpandHome(destPath)
+		destPath = filepath.Join(destPath, path.Base(canonicalKey))
+	} else {
 		// Check if target is in local config
 		for _, t := range cfg.Targets {
-			tKey := config.CanonicalCloudKey(targetNamespace, t.Path, t.Namespace)
+			tKey := config.CanonicalCloudKey(targetNamespace, t.Name)
 			if tKey == canonicalKey || path.Base(tKey) == path.Base(canonicalKey) {
 				destPath = sysinfo.ExpandHome(t.Path)
 				break

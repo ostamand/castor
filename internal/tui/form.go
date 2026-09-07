@@ -5,6 +5,7 @@ import (
 	"strings"
 
 	"github.com/charmbracelet/huh"
+	"github.com/ostamand/castor/internal/crypto"
 )
 
 // InitFormResult captures user choices from the castor init wizard
@@ -149,7 +150,7 @@ func RunInitForm(defaultNamespace string) (*InitFormResult, error) {
 			Description("Protect your archives so only you can unlock and read them").
 			Options(
 				huh.NewOption("Create a new secure encryption key for me (Recommended)", "generate"),
-				huh.NewOption("I already have an Age public key (age1...)", "existing"),
+				huh.NewOption("I already have an encryption key (Secret or Public Key)", "existing"),
 			).
 			Value(&keyChoice),
 	))
@@ -164,20 +165,26 @@ func RunInitForm(defaultNamespace string) (*InitFormResult, error) {
 		formKey := huh.NewForm(
 			huh.NewGroup(
 				huh.NewInput().
-					Title("Existing Age Public Key").
-					Placeholder("age1...").
+					Title("Existing Encryption Key").
+					Description("Paste your Secret Key (AGE-SECRET-KEY-1...) or Public Key (age1...)").
+					Placeholder("AGE-SECRET-KEY-1... or age1...").
 					Value(&result.ExistingPubKey).
 					Validate(func(s string) error {
-						if !strings.HasPrefix(strings.TrimSpace(s), "age1") {
-							return fmt.Errorf("Age public key must begin with 'age1'")
-						}
-						return nil
+						_, err := crypto.ParseRecipientOrIdentity(s)
+						return err
 					}),
 			),
 		).WithTheme(theme)
 		if err := formKey.Run(); err != nil {
 			return nil, err
 		}
+
+		// Normalize to public key so only the public key is stored in configuration
+		pubKey, err := crypto.ParseRecipientOrIdentity(result.ExistingPubKey)
+		if err != nil {
+			return nil, err
+		}
+		result.ExistingPubKey = pubKey
 	}
 
 	return result, nil

@@ -17,6 +17,7 @@ var doctorCmd = &cobra.Command{
 	Use:   "doctor",
 	Short: "Diagnose system tools, Age keys, and cloud reachability",
 	Long:  "Runs a comprehensive diagnostic check across system tools, Age keys, network connectivity, and storage destinations.",
+	Example: `  castor doctor`,
 	RunE:  runDoctor,
 }
 
@@ -89,5 +90,8 @@ func runDoctor(cmd *cobra.Command, args []string) error {
 	}
 
 	fmt.Println(tui.RenderTable([]string{"Component", "Details", "Health"}, rows))
+	if cfg != nil {
+		tui.MaybePrintTip(cfg.AreTipsEnabled())
+	}
 	return nil
 }

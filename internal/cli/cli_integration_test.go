@@ -55,6 +55,7 @@ func executeCommand(args ...string) (string, error) {
 
 func TestFullCLIIntegrationLifecycle(t *testing.T) {
 	testEnv := t.TempDir()
+	t.Setenv("HOME", testEnv)
 
 	// 1. Setup isolated environment
 	cfgDir := filepath.Join(testEnv, "config")
@@ -177,7 +178,7 @@ func TestFullCLIIntegrationLifecycle(t *testing.T) {
 		t.Errorf("push expected to sync app-a and docs, got: %s", pushOut)
 	}
 
-	vaultArchivesDir := filepath.Join(vaultDir, "archives")
+	vaultArchivesDir := vaultDir
 	var foundArchives []string
 	_ = filepath.Walk(vaultArchivesDir, func(p string, info os.FileInfo, err error) error {
 		if err == nil && !info.IsDir() {
@@ -196,6 +197,24 @@ func TestFullCLIIntegrationLifecycle(t *testing.T) {
 	}
 	if !strings.Contains(strings.ToLower(pushIdempotentOut), "up to date") {
 		t.Errorf("expected zero-work skip on second push, got: %s", pushIdempotentOut)
+	}
+
+	// 8a. Test `castor config`
+	configOut, err := executeCommand("config", "--config", configPath)
+	if err != nil {
+		t.Fatalf("config command failed: %v\nOutput: %s", err, configOut)
+	}
+	if !strings.Contains(configOut, initCfg.Namespace) || !strings.Contains(configOut, "app-a") || !strings.Contains(configOut, "docs") {
+		t.Errorf("config expected namespace and targets, got:\n%s", configOut)
+	}
+
+	// 8b. Test `castor schedule history`
+	histOut, err := executeCommand("schedule", "history", "--config", configPath)
+	if err != nil {
+		t.Fatalf("schedule history failed: %v\nOutput: %s", err, histOut)
+	}
+	if !strings.Contains(histOut, "Run History") || !strings.Contains(histOut, "SUCCESS") {
+		t.Errorf("schedule history expected SUCCESS run, got:\n%s", histOut)
 	}
 
 	// 9. Test `castor ls`
@@ -281,7 +300,7 @@ func TestFullCLIIntegrationLifecycle(t *testing.T) {
 
 	// 11. Test `castor pull` (full restore of Git repo, stashes, and untracked files)
 	destAppA := filepath.Join(restoreDir, "app-a")
-	pullOut, err := executeCommand("pull", "app-a", "--to", destAppA, "--key", kp.SecretKey, "--force", "--config", configPath)
+	pullOut, err := executeCommand("pull", "app-a", "--to", restoreDir, "--key", kp.SecretKey, "--force", "--config", configPath)
 	if err != nil {
 		t.Fatalf("pull failed: %v\nOutput: %s", err, pullOut)
 	}
@@ -315,10 +334,15 @@ func TestFullCLIIntegrationLifecycle(t *testing.T) {
 		t.Errorf("git stash was not restored in pulled app-a: %s (%v)", string(stashOut), err)
 	}
 
-	// 12. Test `castor prune`
-	// Delete 'docs' from config.toml, then run prune
-	cfg.Targets = []config.TargetConfig{cfg.Targets[0]} // keep only app-a
-	_ = config.SaveConfig(configPath, cfg)
+	// 12. Test `castor remove` and `castor prune`
+	// Remove 'docs' from config using castor remove
+	removeOut, err := executeCommand("remove", "docs", "-y", "--config", configPath)
+	if err != nil {
+		t.Fatalf("remove docs failed: %v\nOutput: %s", err, removeOut)
+	}
+	if !strings.Contains(removeOut, "Removed target") || !strings.Contains(removeOut, "docs") {
+		t.Errorf("expected confirmation of removal for docs, got: %s", removeOut)
+	}
 
 	pruneDryOut, err := executeCommand("prune", "--dry-run", "--config", configPath)
 	if err != nil {

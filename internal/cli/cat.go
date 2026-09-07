@@ -28,6 +28,9 @@ var catCmd = &cobra.Command{
 	Long: `Streams the remote archive down in memory, locates the specified file,
 writes its decrypted bytes directly to standard output (or an output file),
 and terminates the connection immediately once transferred.`,
+	Example: `  castor cat myproject README.md
+  castor cat myproject config.toml -o config.toml
+  castor cat myproject .env -k AGE-SECRET-KEY-1...`,
 	Args: cobra.ExactArgs(2),
 	RunE: runCat,
 }
