@@ -1,6 +1,7 @@
 package auth
 
 import (
+	"bufio"
 	"context"
 	"crypto/rand"
 	"crypto/sha256"
@@ -9,6 +10,7 @@ import (
 	"fmt"
 	"net"
 	"net/http"
+	"net/url"
 	"os"
 	"path/filepath"
 	"strings"
@@ -24,10 +26,17 @@ var dropboxEndpoint = oauth2.Endpoint{
 	TokenURL: "https://api.dropboxapi.com/oauth2/token",
 }
 
-// defaultDropboxAppKey can be injected at compile time via -ldflags:
+// DefaultDropboxLoopbackPort is the standard local port for Dropbox OAuth redirect
+const DefaultDropboxLoopbackPort = 53682
+
+// defaultDropboxAppKey and defaultDropboxAppSecret can be injected at compile time via -ldflags:
 //
 //	-X github.com/ostamand/castor/internal/auth.defaultDropboxAppKey=...
-var defaultDropboxAppKey string
+//	-X github.com/ostamand/castor/internal/auth.defaultDropboxAppSecret=...
+var (
+	defaultDropboxAppKey    string
+	defaultDropboxAppSecret string
+)
 
 // GetDropboxAppKey returns the active Dropbox App Key
 func GetDropboxAppKey() string {
@@ -35,6 +44,14 @@ func GetDropboxAppKey() string {
 		return k
 	}
 	return strings.TrimSpace(defaultDropboxAppKey)
+}
+
+// GetDropboxAppSecret returns the optional Dropbox App Secret
+func GetDropboxAppSecret() string {
+	if s := strings.TrimSpace(os.Getenv("CASTOR_DROPBOX_APP_SECRET")); s != "" {
+		return s
+	}
+	return strings.TrimSpace(defaultDropboxAppSecret)
 }
 
 // DropboxCredentials holds OAuth tokens and app key on disk
@@ -103,8 +120,9 @@ func GetDropboxClient(ctx context.Context) (*http.Client, error) {
 	}
 
 	conf := &oauth2.Config{
-		ClientID: appKey,
-		Endpoint: dropboxEndpoint,
+		ClientID:     appKey,
+		ClientSecret: GetDropboxAppSecret(),
+		Endpoint:     dropboxEndpoint,
 	}
 
 	tokenSource := conf.TokenSource(ctx, &creds.Token)
@@ -137,9 +155,14 @@ func DropboxLogin(ctx context.Context, appKey string) (*oauth2.Token, error) {
 		return nil, fmt.Errorf("failed to generate PKCE challenge: %w", err)
 	}
 
-	listener, err := net.Listen("tcp", "127.0.0.1:0")
+	// Try standard fixed port 53682 first so registered redirect URI matches
+	listener, err := net.Listen("tcp", fmt.Sprintf("127.0.0.1:%d", DefaultDropboxLoopbackPort))
 	if err != nil {
-		return nil, fmt.Errorf("failed to start local loopback listener: %w", err)
+		// Fallback to any available ephemeral port if 53682 is in use
+		listener, err = net.Listen("tcp", "127.0.0.1:0")
+		if err != nil {
+			return nil, fmt.Errorf("failed to start local loopback listener: %w", err)
+		}
 	}
 	defer listener.Close()
 
@@ -147,9 +170,10 @@ func DropboxLogin(ctx context.Context, appKey string) (*oauth2.Token, error) {
 	redirectURL := fmt.Sprintf("http://127.0.0.1:%d/callback", port)
 
 	conf := &oauth2.Config{
-		ClientID:    appKey,
-		Endpoint:    dropboxEndpoint,
-		RedirectURL: redirectURL,
+		ClientID:     appKey,
+		ClientSecret: GetDropboxAppSecret(),
+		Endpoint:     dropboxEndpoint,
+		RedirectURL:  redirectURL,
 		Scopes: []string{
 			"files.content.write",
 			"files.content.read",
@@ -193,6 +217,29 @@ func DropboxLogin(ctx context.Context, appKey string) (*oauth2.Token, error) {
 	}()
 
 	OpenBrowser(authURL)
+
+	fmt.Printf("Redirect URI: %s\n", redirectURL)
+	fmt.Println("Waiting for browser authorization...")
+	fmt.Println("(If your browser does not redirect automatically, paste the redirect URL or code here:)")
+
+	// Stdin fallback reader
+	go func() {
+		reader := bufio.NewReader(os.Stdin)
+		input, err := reader.ReadString('\n')
+		if err == nil {
+			input = strings.TrimSpace(input)
+			if input != "" {
+				if strings.Contains(input, "code=") {
+					if u, err := url.Parse(input); err == nil {
+						if c := u.Query().Get("code"); c != "" {
+							input = c
+						}
+					}
+				}
+				codeChan <- input
+			}
+		}
+	}()
 
 	select {
 	case code := <-codeChan:
