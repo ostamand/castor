@@ -15,6 +15,7 @@ type InitFormResult struct {
 	GCSBucket      string
 	GCSLocation    string
 	GDriveFolder   string
+	DropboxFolder  string
 	LocalPath      string
 	GenerateAgeKey bool
 	ExistingPubKey string
@@ -26,6 +27,7 @@ func RunInitForm(defaultNamespace string) (*InitFormResult, error) {
 		Namespace:      defaultNamespace,
 		GCSLocation:    "northamerica-northeast1",
 		GDriveFolder:   "CastorLodge",
+		DropboxFolder:  "CastorLodge",
 		LocalPath:      "~/Backups/castor",
 		GenerateAgeKey: true,
 	}
@@ -57,6 +59,7 @@ func RunInitForm(defaultNamespace string) (*InitFormResult, error) {
 				Options(
 					huh.NewOption("Google Cloud Storage (GCS) — Fast, low-cost long-term cloud storage", "gcs"),
 					huh.NewOption("Google Drive — Back up directly to your personal or Workspace Drive", "gdrive"),
+					huh.NewOption("Dropbox — Back up directly to your personal or Team Dropbox", "dropbox"),
 					huh.NewOption("Local or External Drive / NAS — Back up to a local directory, USB drive, or NAS", "local"),
 				).
 				Value(&result.Providers).
@@ -78,6 +81,7 @@ func RunInitForm(defaultNamespace string) (*InitFormResult, error) {
 
 	hasGCS := false
 	hasGDrive := false
+	hasDropbox := false
 	hasLocal := false
 	for _, p := range result.Providers {
 		if p == "gcs" {
@@ -85,6 +89,9 @@ func RunInitForm(defaultNamespace string) (*InitFormResult, error) {
 		}
 		if p == "gdrive" {
 			hasGDrive = true
+		}
+		if p == "dropbox" {
+			hasDropbox = true
 		}
 		if p == "local" {
 			hasLocal = true
@@ -118,6 +125,22 @@ func RunInitForm(defaultNamespace string) (*InitFormResult, error) {
 				Description("Folder in your Google Drive where archives will be stored").
 				Placeholder("CastorLodge").
 				Value(&result.GDriveFolder).
+				Validate(func(s string) error {
+					if strings.TrimSpace(s) == "" {
+						return fmt.Errorf("folder path cannot be empty")
+					}
+					return nil
+				}),
+		))
+	}
+
+	if hasDropbox {
+		groups = append(groups, huh.NewGroup(
+			huh.NewInput().
+				Title("Dropbox Remote Folder").
+				Description("Folder in your Dropbox where archives will be stored").
+				Placeholder("CastorLodge").
+				Value(&result.DropboxFolder).
 				Validate(func(s string) error {
 					if strings.TrimSpace(s) == "" {
 						return fmt.Errorf("folder path cannot be empty")

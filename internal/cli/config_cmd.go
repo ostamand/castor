@@ -67,6 +67,9 @@ func runConfigShow(cmd *cobra.Command, args []string) error {
 		if dest.Bucket != "" {
 			fmt.Printf(" → bucket: %s", dest.Bucket)
 		}
+		if dest.Path != "" {
+			fmt.Printf(" → %s", dest.Path)
+		}
 		fmt.Println()
 	}
 	fmt.Println()

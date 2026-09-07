@@ -20,6 +20,9 @@ endif
 ifneq ($(CASTOR_GOOGLE_CLIENT_SECRET),)
     LDFLAGS += -X $(AUTH_PKG).defaultClientSecret=$(CASTOR_GOOGLE_CLIENT_SECRET)
 endif
+ifneq ($(CASTOR_DROPBOX_APP_KEY),)
+    LDFLAGS += -X $(AUTH_PKG).defaultDropboxAppKey=$(CASTOR_DROPBOX_APP_KEY)
+endif
 
 SKILLS_SRC := $(CURDIR)/skills
 SKILLS_DEST := $(HOME)/.gemini/config/skills

@@ -98,6 +98,12 @@ func DefaultCredentialsPath() string {
 	return filepath.Join(home, ".config", "castor", "credentials.json")
 }
 
+// DefaultDropboxCredentialsPath returns ~/.config/castor/dropbox_credentials.json
+func DefaultDropboxCredentialsPath() string {
+	home, _ := os.UserHomeDir()
+	return filepath.Join(home, ".config", "castor", "dropbox_credentials.json")
+}
+
 // DefaultConfig initializes a recommended configuration
 func DefaultConfig() *Config {
 	host := sysinfo.GetHostInfo()
@@ -225,6 +231,8 @@ func (c *Config) Validate() error {
 			if d.Path == "" {
 				return fmt.Errorf("local destination '%s' requires a path", d.Name)
 			}
+		case "dropbox", "dbx":
+			// Folder is optional; defaults to /CastorLodge or root of App folder
 		case "memory":
 			// in-memory provider for testing
 		default:

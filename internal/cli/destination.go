@@ -35,13 +35,14 @@ var (
 var destinationCmd = &cobra.Command{
 	Use:     "destination [command]",
 	Aliases: []string{"dest", "provider", "providers", "destinations"},
-	Short:   "Manage storage destinations and providers (Local, Google Drive, GCS)",
+	Short:   "Manage storage destinations and providers (Local, Google Drive, Dropbox, GCS)",
 	Long: `Manage storage destinations where Castor streams encrypted archives.
 
 Castor supports multiple simultaneous destinations via zero-disk fan-out streaming:
-  • local:  Local directory, external NVMe/USB drive, or NFS/SMB NAS mount
-  • gdrive: Google Drive folder (personal or Google Workspace)
-  • gcs:    Google Cloud Storage bucket (Standard, Nearline, Coldline, Archive)
+  • local:   Local directory, external NVMe/USB drive, or NFS/SMB NAS mount
+  • gdrive:  Google Drive folder (personal or Google Workspace)
+  • dropbox: Dropbox folder (personal or Team)
+  • gcs:     Google Cloud Storage bucket (Standard, Nearline, Coldline, Archive)
 
 You can invoke this command using 'castor destination' or 'castor provider'.`,
 	Example: `  # List all configured destinations
@@ -54,6 +55,9 @@ You can invoke this command using 'castor destination' or 'castor provider'.`,
 
   # Add a Google Drive destination
   castor provider add gdrive --folder CastorLodge --name gdrive-backup
+
+  # Add a Dropbox destination
+  castor provider add dropbox --folder CastorLodge --name dbx-backup
 
   # Add a Google Cloud Storage bucket
   castor provider add gcs --bucket my-castor-coldline --location northamerica-northeast1
@@ -83,14 +87,16 @@ var destinationAddCmd = &cobra.Command{
 	Long: `Adds a new storage destination to ~/.config/castor/config.toml.
 
 Supported providers:
-  • local  - Local filesystem directory, external drive, or NAS mount
-  • gdrive - Google Drive folder
-  • gcs    - Google Cloud Storage bucket
+  • local   - Local filesystem directory, external drive, or NAS mount
+  • gdrive  - Google Drive folder
+  • dropbox - Dropbox folder
+  • gcs     - Google Cloud Storage bucket
 
 If invoked without arguments, an interactive setup prompt will guide you.`,
 	Example: `  castor provider add local /mnt/backup/castor --name nas-backup
   castor provider add local ~/Backups/castor
   castor provider add gdrive --folder CastorLodge --name google-drive
+  castor provider add dropbox --folder CastorLodge --name my-dropbox
   castor provider add gcs --bucket my-backup-bucket --name gcs-coldline
   castor provider add`,
 	Args: cobra.MaximumNArgs(2),
@@ -192,6 +198,8 @@ func runDestinationList(cmd *cobra.Command, args []string) error {
 			provBadge = lipgloss.NewStyle().Foreground(tui.ColorSuccess).Render("local")
 		case "gdrive":
 			provBadge = lipgloss.NewStyle().Foreground(tui.ColorPrimary).Render("gdrive")
+		case "dropbox", "dbx":
+			provBadge = lipgloss.NewStyle().Foreground(tui.ColorAccent).Render("dropbox")
 		case "gcs":
 			provBadge = lipgloss.NewStyle().Foreground(tui.ColorWarning).Render("gcs")
 		}
@@ -216,6 +224,12 @@ func formatDestinationLocation(dest config.DestinationConfig) string {
 	case "local", "file", "fs":
 		return dest.Path
 	case "gdrive":
+		folder := dest.Folder
+		if folder == "" {
+			folder = "CastorLodge"
+		}
+		return "folder: " + folder
+	case "dropbox", "dbx":
 		folder := dest.Folder
 		if folder == "" {
 			folder = "CastorLodge"
@@ -314,10 +328,12 @@ func runDestinationAdd(cmd *cobra.Command, args []string) error {
 		providerType = "local"
 	case "gdrive", "drive", "google-drive", "googledrive":
 		providerType = "gdrive"
+	case "dropbox", "dbx":
+		providerType = "dropbox"
 	case "gcs", "google-cloud-storage", "cloud-storage":
 		providerType = "gcs"
 	default:
-		return fmt.Errorf("unsupported provider '%s'. Supported providers: local, gdrive, gcs", providerType)
+		return fmt.Errorf("unsupported provider '%s'. Supported providers: local, gdrive, dropbox, gcs", providerType)
 	}
 
 	var newDest config.DestinationConfig
@@ -389,6 +405,50 @@ func runDestinationAdd(cmd *cobra.Command, args []string) error {
 			newDest.Name = generateUniqueDestName("google-drive", cfg)
 		} else {
 			newDest.Name = name
+		}
+
+	case "dropbox":
+		folder := destAddFolder
+		if folder == "" {
+			folder = locationArg
+		}
+		if folder == "" && !noTUI {
+			folder, err = promptDropboxFolder()
+			if err != nil {
+				return err
+			}
+		}
+		if folder == "" {
+			folder = "CastorLodge"
+		}
+		newDest.Folder = folder
+
+		name := destAddName
+		if name == "" {
+			newDest.Name = generateUniqueDestName("dropbox", cfg)
+		} else {
+			newDest.Name = name
+		}
+
+		if !auth.HasValidDropboxCredentials() && !noTUI {
+			authNow, _ := tui.ConfirmPrompt(
+				"Dropbox Not Authenticated",
+				"No Dropbox credentials found. Would you like to log in via browser now?",
+				true,
+			)
+			if authNow {
+				appKey := auth.GetDropboxAppKey()
+				if appKey == "" {
+					fmt.Print("Enter your Dropbox App Key: ")
+					fmt.Scanln(&appKey)
+				}
+				if appKey != "" {
+					ctx := context.Background()
+					if _, err := auth.DropboxLogin(ctx, appKey); err != nil {
+						fmt.Printf("⚠️  Dropbox login failed: %v\n", err)
+					}
+				}
+			}
 		}
 
 	case "gcs":
@@ -491,6 +551,7 @@ func promptProviderType() (string, error) {
 				Options(
 					huh.NewOption("Local Filesystem / External Drive / NAS Mount", "local"),
 					huh.NewOption("Google Drive (personal or Workspace)", "gdrive"),
+					huh.NewOption("Dropbox (personal or Team)", "dropbox"),
 					huh.NewOption("Google Cloud Storage (GCS Bucket)", "gcs"),
 				).
 				Value(&selected),
@@ -501,6 +562,24 @@ func promptProviderType() (string, error) {
 		return "", err
 	}
 	return selected, nil
+}
+
+func promptDropboxFolder() (string, error) {
+	folder := "CastorLodge"
+	form := huh.NewForm(
+		huh.NewGroup(
+			huh.NewInput().
+				Title("Dropbox Remote Folder").
+				Description("Enter the folder inside Dropbox to store archives:").
+				Placeholder("CastorLodge").
+				Value(&folder),
+		),
+	).WithTheme(tui.ThemeCastor())
+
+	if err := form.Run(); err != nil {
+		return "", err
+	}
+	return folder, nil
 }
 
 func promptLocalPath() (string, error) {

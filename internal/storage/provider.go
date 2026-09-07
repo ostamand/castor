@@ -38,6 +38,12 @@ func NewProviderFromConfig(ctx context.Context, dest config.DestinationConfig) (
 	case "gdrive":
 		opts, _ := auth.GetGoogleClientOptions(ctx)
 		return NewGDriveProvider(ctx, dest.Name, dest.Folder, opts...)
+	case "dropbox", "dbx":
+		client, err := auth.GetDropboxClient(ctx)
+		if err != nil {
+			return nil, err
+		}
+		return NewDropboxProvider(dest.Name, dest.Folder, client), nil
 	case "local", "file", "fs":
 		return NewLocalProvider(dest.Name, dest.Path)
 	case "memory":

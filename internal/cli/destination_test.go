@@ -196,6 +196,56 @@ func TestDestinationAddGDriveAndGCS(t *testing.T) {
 	}
 }
 
+func TestDestinationAddDropbox(t *testing.T) {
+	testCfgPath, cleanup := setupTestConfig(t)
+	defer cleanup()
+
+	origCfgPath := cfgPath
+	origNoTUI := noTUI
+	defer func() {
+		cfgPath = origCfgPath
+		noTUI = origNoTUI
+	}()
+
+	cfgPath = testCfgPath
+	noTUI = true
+
+	// Add Dropbox destination
+	destAddName = "my-dropbox"
+	destAddFolder = "MyCastorLodge"
+	err := runDestinationAdd(destinationAddCmd, []string{"dropbox"})
+	if err != nil {
+		t.Fatalf("failed to add dropbox destination: %v", err)
+	}
+
+	cfg, err := config.LoadConfig(testCfgPath)
+	if err != nil {
+		t.Fatalf("failed to reload config: %v", err)
+	}
+
+	var found bool
+	for _, d := range cfg.Destinations {
+		if d.Name == "my-dropbox" && d.Provider == "dropbox" && d.Folder == "MyCastorLodge" {
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Errorf("my-dropbox destination not found or has incorrect parameters in config")
+	}
+
+	// Verify listing includes dropbox
+	output := captureOutput(func() {
+		_ = runDestinationList(destinationListCmd, []string{})
+	})
+	if !strings.Contains(output, "my-dropbox") {
+		t.Errorf("expected destination list to contain 'my-dropbox', got: %s", output)
+	}
+	if !strings.Contains(output, "dropbox") {
+		t.Errorf("expected destination list to contain 'dropbox', got: %s", output)
+	}
+}
+
 func TestDestinationRemove(t *testing.T) {
 	testCfgPath, cleanup := setupTestConfig(t)
 	defer cleanup()

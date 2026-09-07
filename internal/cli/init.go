@@ -69,6 +69,16 @@ func runInit(cmd *cobra.Command, args []string) error {
 				Provider: "gdrive",
 				Folder:   formResult.GDriveFolder,
 			})
+		case "dropbox":
+			folder := formResult.DropboxFolder
+			if folder == "" {
+				folder = "CastorLodge"
+			}
+			cfg.Destinations = append(cfg.Destinations, config.DestinationConfig{
+				Name:     "dropbox",
+				Provider: "dropbox",
+				Folder:   folder,
+			})
 		case "local":
 			cfg.Destinations = append(cfg.Destinations, config.DestinationConfig{
 				Name:     "local-backup",
@@ -223,11 +233,59 @@ func runInit(cmd *cobra.Command, args []string) error {
 		}
 	}
 
+	// Connect Dropbox account if Dropbox was selected and not yet authorized
+	hasDropboxDest := false
+	for _, p := range formResult.Providers {
+		if p == "dropbox" {
+			hasDropboxDest = true
+			break
+		}
+	}
+
+	if hasDropboxDest && !auth.HasValidDropboxCredentials() {
+		fmt.Println()
+		loginNow, _ := tui.ConfirmPrompt(
+			"Connect Dropbox",
+			"Castor needs permission to store archives in Dropbox. Authenticate via browser now?",
+			true,
+		)
+		if loginNow {
+			appKey := auth.GetDropboxAppKey()
+			if appKey == "" {
+				fmt.Print("Enter your Dropbox App Key: ")
+				fmt.Scanln(&appKey)
+				appKey = strings.TrimSpace(appKey)
+			}
+			if appKey != "" {
+				fmt.Println("\n🦫 Opening browser to authenticate with Dropbox...")
+				authCtx, authCancel := context.WithTimeout(context.Background(), 3*time.Minute)
+				if _, err := auth.DropboxLogin(authCtx, appKey); err != nil {
+					fmt.Println(lipgloss.NewStyle().Foreground(tui.ColorWarning).Render(
+						fmt.Sprintf("⚠️  Dropbox authentication deferred (%v). You can log in later with 'castor auth login dropbox'.", err),
+					))
+				} else {
+					fmt.Println(lipgloss.NewStyle().Foreground(tui.ColorSuccess).Bold(true).Render(
+						"✔ Successfully authenticated with Dropbox!",
+					))
+				}
+				authCancel()
+			}
+		} else {
+			fmt.Println(lipgloss.NewStyle().Foreground(tui.ColorWarning).Render(
+				"⚠️  Remember to run 'castor auth login dropbox' before backing up to Dropbox.",
+			))
+		}
+	}
+
 	fmt.Println()
 	fmt.Println(tui.StyleBold.Render("What to do next:"))
 	step := 1
 	if hasGoogleDest && !auth.HasValidCredentials() {
 		fmt.Printf("  %d. Authenticate with Google   : %s\n", step, lipgloss.NewStyle().Foreground(tui.ColorAccent).Render("castor auth login"))
+		step++
+	}
+	if hasDropboxDest && !auth.HasValidDropboxCredentials() {
+		fmt.Printf("  %d. Authenticate with Dropbox  : %s\n", step, lipgloss.NewStyle().Foreground(tui.ColorAccent).Render("castor auth login dropbox"))
 		step++
 	}
 	fmt.Printf("  %d. Add a folder to back up    : %s\n", step, lipgloss.NewStyle().Foreground(tui.ColorAccent).Render("castor add ~/projects"))
