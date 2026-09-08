@@ -225,6 +225,9 @@ func (c *Config) Validate() error {
 			if d.Bucket == "" {
 				return fmt.Errorf("gcs destination '%s' requires a bucket", d.Name)
 			}
+			if d.CredentialsFile == "" {
+				return fmt.Errorf("gcs destination '%s' requires credentials_file (service account JSON key path)", d.Name)
+			}
 		case "gdrive":
 			if d.Folder == "" {
 				return fmt.Errorf("gdrive destination '%s' requires a folder", d.Name)

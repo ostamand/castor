@@ -44,6 +44,7 @@ provider = "gcs"
 bucket = "my-castor-coldline"
 location = "northamerica-northeast1"
 prefix = "archives"
+credentials_file = "~/.config/castor/gcs-key.json" # Required: service account JSON key
 
 # Destination 2: Google Drive
 [[destinations]]

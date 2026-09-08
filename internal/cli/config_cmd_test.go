@@ -60,7 +60,7 @@ func TestCompareConfigWarningsAndNotices(t *testing.T) {
 			AgePublicKeys: []string{"age1publickeyA"},
 		},
 		Destinations: []config.DestinationConfig{
-			{Name: "gcs-backup", Provider: "gcs", Bucket: "my-bucket"},
+			{Name: "gcs-backup", Provider: "gcs", Bucket: "my-bucket", CredentialsFile: "/path/to/sa.json"},
 			{Name: "drive-backup", Provider: "gdrive", Folder: "Castor"},
 		},
 		Targets: []config.TargetConfig{
@@ -80,7 +80,7 @@ func TestCompareConfigWarningsAndNotices(t *testing.T) {
 			AgePublicKeys: []string{"age1publickeyB"}, // Key changed!
 		},
 		Destinations: []config.DestinationConfig{
-			{Name: "gcs-backup", Provider: "gcs", Bucket: "my-bucket"},
+			{Name: "gcs-backup", Provider: "gcs", Bucket: "my-bucket", CredentialsFile: "/path/to/sa.json"},
 			// drive-backup removed!
 			{Name: "local-nas", Provider: "local", Path: "/mnt/nas"}, // Added destination!
 		},

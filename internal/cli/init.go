@@ -57,11 +57,12 @@ func runInit(cmd *cobra.Command, args []string) error {
 		switch p {
 		case "gcs":
 			cfg.Destinations = append(cfg.Destinations, config.DestinationConfig{
-				Name:     "google-cloud-storage",
-				Provider: "gcs",
-				Bucket:   formResult.GCSBucket,
-				Location: formResult.GCSLocation,
-				Prefix:   "archives",
+				Name:            "google-cloud-storage",
+				Provider:        "gcs",
+				Bucket:          formResult.GCSBucket,
+				Location:        formResult.GCSLocation,
+				Prefix:          "archives",
+				CredentialsFile: formResult.GCSCredentialsFile,
 			})
 		case "gdrive":
 			cfg.Destinations = append(cfg.Destinations, config.DestinationConfig{
@@ -172,40 +173,18 @@ func runInit(cmd *cobra.Command, args []string) error {
 	fmt.Println()
 	fmt.Println(lipgloss.NewStyle().Foreground(tui.ColorSuccess).Bold(true).Render("✔ You're all set! Configuration saved to: ") + configPath)
 
-	// Connect Google account if Google storage was selected and not yet authorized
-	hasGoogleDest := false
+	// Connect Google Drive account if Google Drive was selected and not yet authorized
+	hasGDrive := false
 	for _, p := range formResult.Providers {
-		if p == "gcs" || p == "gdrive" {
-			hasGoogleDest = true
+		if p == "gdrive" {
+			hasGDrive = true
 			break
 		}
 	}
 
-	if hasGoogleDest && !auth.HasValidCredentials() {
-		var scopes []string
-		hasGCS := false
-		hasGDrive := false
-		for _, p := range formResult.Providers {
-			if p == "gcs" {
-				hasGCS = true
-			} else if p == "gdrive" {
-				hasGDrive = true
-			}
-		}
-
-		if hasGDrive {
-			scopes = append(scopes, auth.ScopeGDrive)
-		}
-		if hasGCS {
-			scopes = append(scopes, auth.ScopeGCS)
-		}
-
-		authTarget := "Google"
-		if hasGDrive && !hasGCS {
-			authTarget = "Google Drive"
-		} else if hasGCS && !hasGDrive {
-			authTarget = "Google Cloud Storage"
-		}
+	if hasGDrive && !auth.HasValidCredentials() {
+		scopes := []string{auth.ScopeGDrive}
+		authTarget := "Google Drive"
 
 		fmt.Println()
 		loginNow, _ := tui.ConfirmPrompt(
@@ -213,22 +192,23 @@ func runInit(cmd *cobra.Command, args []string) error {
 			fmt.Sprintf("Castor needs permission to store archives in %s. Authenticate via browser now?", authTarget),
 			true,
 		)
+
 		if loginNow {
-			fmt.Printf("\n🦫 Opening browser to authenticate with %s...\n", authTarget)
+			fmt.Printf("Opening browser to authorize Google Drive (%s)...\n\n", auth.ScopeGDrive)
 			authCtx, authCancel := context.WithTimeout(context.Background(), 3*time.Minute)
 			if _, err := auth.Login(authCtx, scopes...); err != nil {
 				fmt.Println(lipgloss.NewStyle().Foreground(tui.ColorWarning).Render(
-					fmt.Sprintf("⚠️  Authentication deferred (%v). You can log in later with 'castor auth login'.", err),
+					fmt.Sprintf("⚠️  Could not complete Google Drive authentication: %v\nYou can authenticate later using: castor auth login", err),
 				))
 			} else {
 				fmt.Println(lipgloss.NewStyle().Foreground(tui.ColorSuccess).Bold(true).Render(
-					fmt.Sprintf("✔ Successfully authenticated with %s!", authTarget),
+					fmt.Sprintf("✔ Authenticated with Google Drive! Token saved to %s", config.DefaultCredentialsPath()),
 				))
 			}
 			authCancel()
 		} else {
 			fmt.Println(lipgloss.NewStyle().Foreground(tui.ColorWarning).Render(
-				fmt.Sprintf("⚠️  Remember to run 'castor auth login' before backing up to %s.", authTarget),
+				"⚠️  Skipped authentication. Run 'castor auth login' before backing up.",
 			))
 		}
 	}
@@ -280,8 +260,8 @@ func runInit(cmd *cobra.Command, args []string) error {
 	fmt.Println()
 	fmt.Println(tui.StyleBold.Render("What to do next:"))
 	step := 1
-	if hasGoogleDest && !auth.HasValidCredentials() {
-		fmt.Printf("  %d. Authenticate with Google   : %s\n", step, lipgloss.NewStyle().Foreground(tui.ColorAccent).Render("castor auth login"))
+	if hasGDrive && !auth.HasValidCredentials() {
+		fmt.Printf("  %d. Authenticate Google Drive  : %s\n", step, lipgloss.NewStyle().Foreground(tui.ColorAccent).Render("castor auth login"))
 		step++
 	}
 	if hasDropboxDest && !auth.HasValidDropboxCredentials() {

@@ -165,9 +165,14 @@ func TestDestinationAddGDriveAndGCS(t *testing.T) {
 	}
 
 	// Add GCS destination
+	fakeKeyPath := filepath.Join(t.TempDir(), "fake-sa.json")
+	if err := os.WriteFile(fakeKeyPath, []byte("{}"), 0600); err != nil {
+		t.Fatal(err)
+	}
 	destAddName = "my-coldline"
 	destAddBucket = "test-coldline-bucket"
 	destAddLocation = "us-east1"
+	destAddCredentials = fakeKeyPath
 	err = runDestinationAdd(destinationAddCmd, []string{"gcs"})
 	if err != nil {
 		t.Fatalf("failed to add gcs destination: %v", err)
@@ -183,7 +188,7 @@ func TestDestinationAddGDriveAndGCS(t *testing.T) {
 		if d.Name == "my-gdrive" && d.Provider == "gdrive" && d.Folder == "CustomCastorLodge" {
 			hasGDrive = true
 		}
-		if d.Name == "my-coldline" && d.Provider == "gcs" && d.Bucket == "test-coldline-bucket" && d.Location == "us-east1" {
+		if d.Name == "my-coldline" && d.Provider == "gcs" && d.Bucket == "test-coldline-bucket" && d.Location == "us-east1" && d.CredentialsFile == fakeKeyPath {
 			hasGCS = true
 		}
 	}

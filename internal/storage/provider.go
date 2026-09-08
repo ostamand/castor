@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"os"
 	"time"
 
 	"github.com/ostamand/castor/internal/auth"
@@ -35,13 +36,14 @@ type Provider interface {
 func NewProviderFromConfig(ctx context.Context, dest config.DestinationConfig) (Provider, error) {
 	switch dest.Provider {
 	case "gcs":
-		var opts []option.ClientOption
-		if dest.CredentialsFile != "" {
-			opts = append(opts, option.WithCredentialsFile(sysinfo.ExpandHome(dest.CredentialsFile)))
-		} else {
-			googleOpts, _ := auth.GetGoogleClientOptions(ctx)
-			opts = googleOpts
+		if dest.CredentialsFile == "" {
+			return nil, fmt.Errorf("GCS destination '%s' requires an explicit service account key file. Specify 'credentials_file' in config.toml or run 'castor provider add gcs <bucket> --credentials <path>'", dest.Name)
 		}
+		keyPath := sysinfo.ExpandHome(dest.CredentialsFile)
+		if _, err := os.Stat(keyPath); err != nil {
+			return nil, fmt.Errorf("GCS destination '%s': service account key '%s' not found: %w", dest.Name, keyPath, err)
+		}
+		opts := []option.ClientOption{option.WithCredentialsFile(keyPath)}
 		return NewGCSProvider(ctx, dest.Name, dest.Bucket, dest.Prefix, opts...)
 	case "gdrive":
 		opts, _ := auth.GetGoogleClientOptions(ctx)

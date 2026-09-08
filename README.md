@@ -46,9 +46,10 @@ castor add ~/Work/git --scan --git-only
 ### 2. Plug in the storage you already own
 No new subscriptions. Back up to your existing Google Drive, Dropbox, low-cost GCS, or home drive:
 ```bash
-castor provider add dropbox                     # 1-click browser OAuth into scoped App folder
-castor provider add gdrive --folder CastorLodge # Google One / Drive
-castor provider add local /mnt/nas/castor --name local-nas
+castor provider add dropbox                                       # 1-click browser OAuth into scoped App folder
+castor provider add gdrive --folder CastorLodge                   # Google One / Drive
+castor provider add gcs my-bucket --credentials ~/gcs-key.json    # Low-cost GCP Nearline/Coldline
+castor provider add local /mnt/nas/castor --name local-nas        # Home NAS / external SSD
 ```
 
 ### 3. Stream directly into your vaults

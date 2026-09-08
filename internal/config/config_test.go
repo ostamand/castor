@@ -33,9 +33,10 @@ func TestConfigSaveAndLoad(t *testing.T) {
 	cfg.Security.AgePublicKeys = []string{"age1ql3z7hjy54pw3hyww5ayyfg7zqgvc7w3j2elw8zmrj2kg5sfn9aqmcac8p"}
 	cfg.Destinations = []DestinationConfig{
 		{
-			Name:     "gcp-coldline",
-			Provider: "gcs",
-			Bucket:   "test-bucket",
+			Name:            "gcp-coldline",
+			Provider:        "gcs",
+			Bucket:          "test-bucket",
+			CredentialsFile: "/path/to/sa.json",
 		},
 	}
 	cfg.Targets = []TargetConfig{

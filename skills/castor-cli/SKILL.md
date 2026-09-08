@@ -84,8 +84,8 @@ castor provider add dropbox --name my-dropbox
 # Add a Google Drive destination:
 castor provider add gdrive --folder CastorLodge --name google-drive
 
-# Add a Google Cloud Storage bucket:
-castor provider add gcs --bucket my-castor-coldline --location northamerica-northeast1
+# Add a Google Cloud Storage bucket (requires Service Account JSON key):
+castor provider add gcs --bucket my-castor-coldline --credentials ~/.config/castor/gcs-key.json --location northamerica-northeast1
 
 # Interactive wizard (prompts for provider, name, and settings):
 castor provider add

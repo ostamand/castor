@@ -2,23 +2,26 @@ package tui
 
 import (
 	"fmt"
+	"os"
 	"strings"
 
 	"github.com/charmbracelet/huh"
 	"github.com/ostamand/castor/internal/crypto"
+	"github.com/ostamand/castor/internal/sysinfo"
 )
 
 // InitFormResult captures user choices from the castor init wizard
 type InitFormResult struct {
-	Namespace      string
-	Providers      []string
-	GCSBucket      string
-	GCSLocation    string
-	GDriveFolder   string
-	DropboxFolder  string
-	LocalPath      string
-	GenerateAgeKey bool
-	ExistingPubKey string
+	Namespace          string
+	Providers          []string
+	GCSBucket          string
+	GCSLocation        string
+	GCSCredentialsFile string
+	GDriveFolder       string
+	DropboxFolder      string
+	LocalPath          string
+	GenerateAgeKey     bool
+	ExistingPubKey     string
 }
 
 // RunInitForm launches an interactive setup wizard using Charm's Huh
@@ -115,6 +118,22 @@ func RunInitForm(defaultNamespace string) (*InitFormResult, error) {
 				Title("Storage Region").
 				Description("Closest region for fast uploads (e.g. us-central1, northamerica-northeast1)").
 				Value(&result.GCSLocation),
+			huh.NewInput().
+				Title("Service Account Key Path").
+				Description("Path to your GCP Service Account JSON key file").
+				Placeholder("~/.config/castor/gcs-key.json").
+				Value(&result.GCSCredentialsFile).
+				Validate(func(s string) error {
+					trimmed := strings.TrimSpace(s)
+					if trimmed == "" {
+						return fmt.Errorf("service account key file is required for GCS")
+					}
+					expanded := sysinfo.ExpandHome(trimmed)
+					if _, err := os.Stat(expanded); err != nil {
+						return fmt.Errorf("file '%s' not found: %w", trimmed, err)
+					}
+					return nil
+				}),
 		))
 	}
 

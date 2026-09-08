@@ -18,9 +18,8 @@ import (
 	"google.golang.org/api/option"
 )
 
-// Scope constants for Google APIs
+// Scope constants for Google Drive API
 const (
-	ScopeGCS    = "https://www.googleapis.com/auth/devstorage.read_write"
 	ScopeGDrive = "https://www.googleapis.com/auth/drive.file"
 )
 
@@ -33,12 +32,11 @@ var (
 	defaultClientSecret string
 )
 
-// OAuthConfig defines the default OAuth client for Castor desktop CLI
+// OAuthConfig defines the default OAuth client for Castor desktop CLI (Google Drive)
 var OAuthConfig = &oauth2.Config{
 	ClientID:     defaultClientID,
 	ClientSecret: defaultClientSecret,
 	Scopes: []string{
-		ScopeGCS,
 		ScopeGDrive,
 	},
 	Endpoint: google.Endpoint,
@@ -74,12 +72,8 @@ type StoredCredentials struct {
 	ClientSecret string `json:"client_secret,omitempty"`
 }
 
-// GetGoogleClientOptions returns ClientOptions using GOOGLE_APPLICATION_CREDENTIALS or stored OAuth token if present
+// GetGoogleClientOptions returns ClientOptions using stored OAuth token for Google Drive if present
 func GetGoogleClientOptions(ctx context.Context) ([]option.ClientOption, error) {
-	if saPath := os.Getenv("GOOGLE_APPLICATION_CREDENTIALS"); saPath != "" {
-		return []option.ClientOption{option.WithCredentialsFile(saPath)}, nil
-	}
-
 	credsPath := config.DefaultCredentialsPath()
 	data, err := os.ReadFile(credsPath)
 	if err != nil {

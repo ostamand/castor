@@ -25,8 +25,9 @@ var (
 	destAddFolder   string
 	destAddBucket   string
 	destAddLocation string
-	destAddPrefix   string
-	destAddYes      bool
+	destAddPrefix       string
+	destAddCredentials  string
+	destAddYes         bool
 
 	destRemoveYes bool
 )
@@ -59,8 +60,8 @@ You can invoke this command using 'castor destination' or 'castor provider'.`,
   # Add a Dropbox destination (defaults to root of App folder)
   castor provider add dropbox --name my-dropbox
 
-  # Add a Google Cloud Storage bucket
-  castor provider add gcs --bucket my-castor-coldline --location northamerica-northeast1
+  # Add a Google Cloud Storage bucket (requires Service Account JSON key)
+  castor provider add gcs --bucket my-castor-coldline --credentials ~/.config/castor/gcs-key.json --location northamerica-northeast1
 
   # Interactive wizard (prompts for provider, name, and details)
   castor provider add
@@ -90,14 +91,14 @@ Supported providers:
   • local   - Local filesystem directory, external drive, or NAS mount
   • gdrive  - Google Drive folder
   • dropbox - Dropbox folder
-  • gcs     - Google Cloud Storage bucket
+  • gcs     - Google Cloud Storage bucket (requires Service Account JSON key)
 
 If invoked without arguments, an interactive setup prompt will guide you.`,
 	Example: `  castor provider add local /mnt/backup/castor --name nas-backup
   castor provider add local ~/Backups/castor
   castor provider add gdrive --folder CastorLodge --name google-drive
   castor provider add dropbox --folder CastorLodge --name my-dropbox
-  castor provider add gcs --bucket my-backup-bucket --name gcs-coldline
+  castor provider add gcs --bucket my-backup-bucket --credentials ~/.config/castor/gcs-key.json --name gcs-coldline
   castor provider add`,
 	Args: cobra.MaximumNArgs(2),
 	RunE: runDestinationAdd,
@@ -154,6 +155,7 @@ func init() {
 	destinationAddCmd.Flags().StringVarP(&destAddBucket, "bucket", "b", "", "Bucket name for Google Cloud Storage provider")
 	destinationAddCmd.Flags().StringVarP(&destAddLocation, "location", "l", "northamerica-northeast1", "Storage region for GCS provider")
 	destinationAddCmd.Flags().StringVar(&destAddPrefix, "prefix", "archives", "Object prefix for GCS provider")
+	destinationAddCmd.Flags().StringVar(&destAddCredentials, "credentials", "", "Path to Service Account JSON key file (required for GCS)")
 	destinationAddCmd.Flags().BoolVarP(&destAddYes, "yes", "y", false, "Non-interactive mode: auto-confirm directory creation")
 
 	destinationRemoveCmd.Flags().BoolVarP(&destRemoveYes, "yes", "y", false, "Skip confirmation prompt")
@@ -283,6 +285,9 @@ func formatDestinationLocation(dest config.DestinationConfig) string {
 		if dest.Location != "" {
 			loc += fmt.Sprintf(" (%s)", dest.Location)
 		}
+		if dest.CredentialsFile != "" {
+			loc += fmt.Sprintf(" [key: %s]", filepath.Base(dest.CredentialsFile))
+		}
 		return loc
 	default:
 		if dest.Path != "" {
@@ -330,6 +335,7 @@ func runDestinationAdd(cmd *cobra.Command, args []string) error {
 		destAddBucket = ""
 		destAddLocation = "northamerica-northeast1"
 		destAddPrefix = "archives"
+		destAddCredentials = ""
 		destAddYes = false
 	}()
 
@@ -516,6 +522,22 @@ func runDestinationAdd(cmd *cobra.Command, args []string) error {
 			newDest.Prefix = "archives"
 		}
 
+		credsFile := destAddCredentials
+		if credsFile == "" {
+			if noTUI {
+				return fmt.Errorf("flag --credentials is required for gcs provider. Example: castor provider add gcs %s --credentials ~/.config/castor/gcs-key.json", bucket)
+			}
+			credsFile, err = promptGCSCredentials()
+			if err != nil {
+				return err
+			}
+		}
+		cleanCredsPath := sysinfo.ExpandHome(credsFile)
+		if _, statErr := os.Stat(cleanCredsPath); statErr != nil {
+			return fmt.Errorf("service account key file not found at '%s': %w", credsFile, statErr)
+		}
+		newDest.CredentialsFile = credsFile
+
 		name := destAddName
 		if name == "" {
 			newDest.Name = generateUniqueDestName("gcs-"+bucket, cfg)
@@ -669,6 +691,40 @@ func promptGCSBucket() (string, error) {
 		return "", err
 	}
 	return bucket, nil
+}
+
+func promptGCSCredentials() (string, error) {
+	var credsPath string
+	defaultPath := "~/.config/castor/gcs-key.json"
+	form := huh.NewForm(
+		huh.NewGroup(
+			huh.NewInput().
+				Title("GCP Service Account JSON Key").
+				Description("Path to your GCP Service Account JSON credentials file:").
+				Placeholder(defaultPath).
+				Value(&credsPath).
+				Validate(func(s string) error {
+					trimmed := strings.TrimSpace(s)
+					if trimmed == "" {
+						trimmed = defaultPath
+					}
+					expanded := sysinfo.ExpandHome(trimmed)
+					if _, err := os.Stat(expanded); err != nil {
+						return fmt.Errorf("file '%s' not found: %w", trimmed, err)
+					}
+					return nil
+				}),
+		),
+	).WithTheme(tui.ThemeCastor())
+
+	if err := form.Run(); err != nil {
+		return "", err
+	}
+	trimmed := strings.TrimSpace(credsPath)
+	if trimmed == "" {
+		trimmed = defaultPath
+	}
+	return trimmed, nil
 }
 
 func runDestinationRemove(cmd *cobra.Command, args []string) error {

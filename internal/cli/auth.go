@@ -17,14 +17,14 @@ import (
 
 var authCmd = &cobra.Command{
 	Use:   "auth",
-	Short: "Manage cloud storage credentials (Google Drive, Dropbox, GCS)",
-	Long:  "Authenticate with Google or Dropbox via interactive browser loopback, check token status, or log out.",
+	Short: "Manage cloud storage credentials (Google Drive, Dropbox)",
+	Long:  "Authenticate with Google Drive or Dropbox via interactive browser loopback, check token status, or log out. (Note: GCS uses dedicated Service Account key files configured per destination).",
 }
 
 var authLoginCmd = &cobra.Command{
 	Use:   "login [google|dropbox]",
 	Short: "Authenticate via browser OAuth loopback",
-	Long:  "Authenticate with Google or Dropbox. By default, authenticates with Google or the provider specified.",
+	Long:  "Authenticate with Google Drive or Dropbox via browser OAuth loopback.",
 	Example: `  castor auth login
   castor auth login dropbox
   castor auth login --gdrive
@@ -46,14 +46,12 @@ var authLogoutCmd = &cobra.Command{
 
 var (
 	authLoginGDrive  bool
-	authLoginGCS     bool
 	authLoginDropbox bool
 	authLoginManual  bool
 )
 
 func init() {
-	authLoginCmd.Flags().BoolVar(&authLoginGDrive, "gdrive", false, "Authenticate for Google Drive only")
-	authLoginCmd.Flags().BoolVar(&authLoginGCS, "gcs", false, "Authenticate for Google Cloud Storage only")
+	authLoginCmd.Flags().BoolVar(&authLoginGDrive, "gdrive", false, "Authenticate for Google Drive")
 	authLoginCmd.Flags().BoolVar(&authLoginDropbox, "dropbox", false, "Authenticate for Dropbox")
 	authLoginCmd.Flags().BoolVarP(&authLoginManual, "manual", "m", false, "Manual mode: copy-paste authorization code from Dropbox (no redirect URL needed)")
 	authCmd.AddCommand(authLoginCmd)
@@ -89,59 +87,18 @@ func runDropboxLogin(ctx context.Context) error {
 func runAuthLogin(cmd *cobra.Command, args []string) error {
 	ctx := context.Background()
 
+	if len(args) > 0 && args[0] == "gcs" {
+		return fmt.Errorf("Google Cloud Storage (GCS) uses dedicated Service Account key files, not browser OAuth.\nRun: castor provider add gcs <bucket> --credentials /path/to/key.json")
+	}
+
 	if (len(args) > 0 && (args[0] == "dropbox" || args[0] == "dbx")) || authLoginDropbox {
 		return runDropboxLogin(ctx)
 	}
 
-	var scopes []string
-	if authLoginGDrive {
-		scopes = append(scopes, auth.ScopeGDrive)
-	}
-	if authLoginGCS {
-		scopes = append(scopes, auth.ScopeGCS)
-	}
+	scopes := []string{auth.ScopeGDrive}
 
-	// If no flags were passed, inspect config.toml
-	if len(scopes) == 0 {
-		cfgPath := config.DefaultConfigPath()
-		if cfg, err := config.LoadConfig(cfgPath); err == nil {
-			hasGCS := false
-			hasGDrive := false
-			hasDropbox := false
-			for _, dest := range cfg.Destinations {
-				if dest.Provider == "gcs" {
-					hasGCS = true
-				} else if dest.Provider == "gdrive" {
-					hasGDrive = true
-				} else if dest.Provider == "dropbox" || dest.Provider == "dbx" {
-					hasDropbox = true
-				}
-			}
-			if hasDropbox && !hasGDrive && !hasGCS {
-				return runDropboxLogin(ctx)
-			}
-			if hasGDrive {
-				scopes = append(scopes, auth.ScopeGDrive)
-			}
-			if hasGCS {
-				scopes = append(scopes, auth.ScopeGCS)
-			}
-		}
-	}
-
-	// If still empty (e.g. no config or no Google destinations configured), default to Google Drive
-	if len(scopes) == 0 {
-		scopes = append(scopes, auth.ScopeGDrive)
-	}
-
-	fmt.Println("🦫 Castor · Google OAuth 2.0 Loopback Authentication")
-	if len(scopes) == 1 && scopes[0] == auth.ScopeGDrive {
-		fmt.Printf("Opening browser to authorize Google Drive (%s)...\n\n", auth.ScopeGDrive)
-	} else if len(scopes) == 1 && scopes[0] == auth.ScopeGCS {
-		fmt.Printf("Opening browser to authorize Google Cloud Storage (%s)...\n\n", auth.ScopeGCS)
-	} else {
-		fmt.Printf("Opening browser to authorize Google Cloud Storage and Google Drive...\n\n")
-	}
+	fmt.Println("🦫 Castor · Google Drive OAuth 2.0 Loopback Authentication")
+	fmt.Printf("Opening browser to authorize Google Drive (%s)...\n\n", auth.ScopeGDrive)
 
 	_, err := auth.Login(ctx, scopes...)
 	if err != nil {
