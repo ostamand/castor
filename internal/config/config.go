@@ -47,8 +47,9 @@ type DestinationConfig struct {
 	Location string `toml:"location,omitempty"`
 	Prefix   string `toml:"prefix,omitempty"`
 	Folder   string `toml:"folder,omitempty"` // For Google Drive e.g. "CastorLodge"
-	Path     string `toml:"path,omitempty"`   // For local directory provider e.g. "/mnt/vault"
-	Disabled bool   `toml:"disabled,omitempty"`
+	Path            string `toml:"path,omitempty"`   // For local directory provider e.g. "/mnt/vault"
+	CredentialsFile string `toml:"credentials_file,omitempty"` // For service account key file (e.g. GCS)
+	Disabled        bool   `toml:"disabled,omitempty"`
 }
 
 type TargetConfig struct {

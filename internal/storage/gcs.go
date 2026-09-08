@@ -68,6 +68,9 @@ func (g *GCSProvider) NewReader(ctx context.Context, objectName string) (io.Read
 // List lists all objects matching prefix in the GCS bucket
 func (g *GCSProvider) List(ctx context.Context, prefix string) ([]ObjectInfo, error) {
 	searchPrefix := g.fullPath(prefix)
+	if searchPrefix != "" && !strings.HasSuffix(searchPrefix, "/") && (prefix == "" || strings.HasSuffix(prefix, "/")) {
+		searchPrefix += "/"
+	}
 	it := g.client.Bucket(g.bucketName).Objects(ctx, &storage.Query{
 		Prefix: searchPrefix,
 	})
@@ -82,9 +85,17 @@ func (g *GCSProvider) List(ctx context.Context, prefix string) ([]ObjectInfo, er
 			return nil, fmt.Errorf("error listing GCS bucket '%s': %w", g.bucketName, err)
 		}
 
+		// Skip 0-byte virtual folder placeholder objects (keys ending with '/')
+		if strings.HasSuffix(attrs.Name, "/") {
+			continue
+		}
+
 		relName := attrs.Name
 		if g.prefix != "" {
 			relName = strings.TrimPrefix(relName, g.prefix+"/")
+		}
+		if relName == "" {
+			continue
 		}
 
 		results = append(results, ObjectInfo{

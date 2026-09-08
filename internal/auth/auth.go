@@ -74,8 +74,12 @@ type StoredCredentials struct {
 	ClientSecret string `json:"client_secret,omitempty"`
 }
 
-// GetGoogleClientOptions returns ClientOptions using stored OAuth token if present
+// GetGoogleClientOptions returns ClientOptions using GOOGLE_APPLICATION_CREDENTIALS or stored OAuth token if present
 func GetGoogleClientOptions(ctx context.Context) ([]option.ClientOption, error) {
+	if saPath := os.Getenv("GOOGLE_APPLICATION_CREDENTIALS"); saPath != "" {
+		return []option.ClientOption{option.WithCredentialsFile(saPath)}, nil
+	}
+
 	credsPath := config.DefaultCredentialsPath()
 	data, err := os.ReadFile(credsPath)
 	if err != nil {

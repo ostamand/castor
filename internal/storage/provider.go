@@ -8,6 +8,8 @@ import (
 
 	"github.com/ostamand/castor/internal/auth"
 	"github.com/ostamand/castor/internal/config"
+	"github.com/ostamand/castor/internal/sysinfo"
+	"google.golang.org/api/option"
 )
 
 // ObjectInfo holds remote storage metadata for an object
@@ -33,7 +35,13 @@ type Provider interface {
 func NewProviderFromConfig(ctx context.Context, dest config.DestinationConfig) (Provider, error) {
 	switch dest.Provider {
 	case "gcs":
-		opts, _ := auth.GetGoogleClientOptions(ctx)
+		var opts []option.ClientOption
+		if dest.CredentialsFile != "" {
+			opts = append(opts, option.WithCredentialsFile(sysinfo.ExpandHome(dest.CredentialsFile)))
+		} else {
+			googleOpts, _ := auth.GetGoogleClientOptions(ctx)
+			opts = googleOpts
+		}
 		return NewGCSProvider(ctx, dest.Name, dest.Bucket, dest.Prefix, opts...)
 	case "gdrive":
 		opts, _ := auth.GetGoogleClientOptions(ctx)
