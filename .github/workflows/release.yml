@@ -49,9 +49,10 @@ jobs:
           GOOGLE_CLIENT_ID: ${{ secrets.CASTOR_GOOGLE_CLIENT_ID }}
           GOOGLE_CLIENT_SECRET: ${{ secrets.CASTOR_GOOGLE_CLIENT_SECRET }}
           DROPBOX_APP_KEY: ${{ secrets.CASTOR_DROPBOX_APP_KEY }}
+          DROPBOX_APP_SECRET: ${{ secrets.CASTOR_DROPBOX_APP_SECRET }}
         run: |
           mkdir -p dist
-          LDFLAGS="-s -w -X github.com/ostamand/castor/internal/cli.version=${VERSION} -X github.com/ostamand/castor/internal/auth.defaultClientID=${GOOGLE_CLIENT_ID} -X github.com/ostamand/castor/internal/auth.defaultClientSecret=${GOOGLE_CLIENT_SECRET} -X github.com/ostamand/castor/internal/auth.defaultDropboxAppKey=${DROPBOX_APP_KEY}"
+          LDFLAGS="-s -w -X github.com/ostamand/castor/internal/cli.version=${VERSION} -X github.com/ostamand/castor/internal/auth.defaultClientID=${GOOGLE_CLIENT_ID} -X github.com/ostamand/castor/internal/auth.defaultClientSecret=${GOOGLE_CLIENT_SECRET} -X github.com/ostamand/castor/internal/auth.defaultDropboxAppKey=${DROPBOX_APP_KEY} -X github.com/ostamand/castor/internal/auth.defaultDropboxAppSecret=${DROPBOX_APP_SECRET}"
 
           echo "Compiling linux/amd64..."
           CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -trimpath -ldflags="${LDFLAGS}" -o dist/castor-linux-amd64 ./cmd/castor
