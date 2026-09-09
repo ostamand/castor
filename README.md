@@ -4,9 +4,9 @@
 
 # Castor 🦫
 
-### Effortless, private code backups to the storage you already own.
+### Effortless, private backups to the storage you already own.
 
-Back up all your repositories, local branches, and stashes in seconds directly to **Google Drive**, **Dropbox**, **GCS**, or your **home drive**.<br>
+Back up all your projects, directories, and Git repositories in seconds directly to **Google Drive**, **Dropbox**, **GCS**, or your **home drive**.<br>
 Encrypted by default, lightning-fast, and completely daemon-free.
 
 <p align="center">
