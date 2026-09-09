@@ -348,14 +348,35 @@ func runPush(cmd *cobra.Command, args []string) error {
 
 	// Process results & update state
 	var totalTransferred int64
-	var pushErrors []string
+	var fatalErrors []string
+	var partialWarnings []string
 
 	for res := range resultsChan {
-		if len(res.DestErrors) > 0 {
-			for dest, destErr := range res.DestErrors {
-				pushErrors = append(pushErrors, fmt.Sprintf("%s (%s): %v", res.TargetName, dest, destErr))
+		// Check how many destinations succeeded for this target
+		var succeededCount int
+		for _, dName := range res.StreamedDests {
+			if res.DestErrors[dName] == nil {
+				succeededCount++
+			}
+		}
+
+		if succeededCount == 0 {
+			// Complete failure: no destination received the backup
+			if len(res.DestErrors) > 0 {
+				for dest, destErr := range res.DestErrors {
+					fatalErrors = append(fatalErrors, fmt.Sprintf("%s (%s): %v", res.TargetName, dest, destErr))
+				}
+			} else {
+				fatalErrors = append(fatalErrors, fmt.Sprintf("%s: all destinations failed", res.TargetName))
 			}
 			continue
+		}
+
+		// At least one destination succeeded!
+		if len(res.DestErrors) > 0 {
+			for dest, destErr := range res.DestErrors {
+				partialWarnings = append(partialWarnings, fmt.Sprintf("%s (%s): %v", res.TargetName, dest, destErr))
+			}
 		}
 
 		totalTransferred += res.CipherBytes
@@ -394,35 +415,74 @@ func runPush(cmd *cobra.Command, args []string) error {
 
 	// Summary output
 	fmt.Println()
-	if len(pushErrors) > 0 {
-		sysinfo.SendDesktopAlert("Castor Backup Alert", fmt.Sprintf("Backup completed with %d error(s). Run 'castor status'.", len(pushErrors)), true)
-		
-		// Record failed/partial run in history
-		historyPath := config.HistoryPathForConfig(configPath)
-		trigger := "manual"
-		if os.Getenv("CASTOR_SCHEDULED") == "1" {
-			trigger = "scheduled"
-		}
+
+	historyPath := config.HistoryPathForConfig(configPath)
+	trigger := "manual"
+	if os.Getenv("CASTOR_SCHEDULED") == "1" {
+		trigger = "scheduled"
+	}
+
+	// 1. Hard/Fatal Errors (targets where 0 destinations received backup)
+	if len(fatalErrors) > 0 {
+		sysinfo.SendDesktopAlert("Castor Backup Alert", fmt.Sprintf("Backup completed with %d fatal error(s). Run 'castor status'.", len(fatalErrors)), true)
+
+		allErrors := append(fatalErrors, partialWarnings...)
 		runRecord := config.RunRecord{
 			StartedAt:      runStarted,
 			FinishedAt:     time.Now().UTC(),
 			Trigger:        trigger,
 			TargetsTotal:   len(targetsToProcess),
-			TargetsSynced:  len(changedTargetNames) - len(pushErrors),
+			TargetsSynced:  len(changedTargetNames) - len(fatalErrors),
 			TargetsSkipped: len(targetsToProcess) - len(changedTargetNames),
-			TargetsFailed:  len(pushErrors),
+			TargetsFailed:  len(fatalErrors),
 			BytesStreamed:  totalTransferred,
-			Errors:         pushErrors,
-			Status:         "partial",
+			Errors:         allErrors,
+			Status:         "failed",
 		}
-		if len(changedTargetNames) == len(pushErrors) {
-			runRecord.Status = "failed"
+		if runRecord.TargetsSynced > 0 {
+			runRecord.Status = "partial"
 		}
 		_ = config.AppendRun(historyPath, runRecord)
 
-		return fmt.Errorf("backup completed with %d errors:\n  %s", len(pushErrors), fmt.Sprintf("%v", pushErrors))
+		return fmt.Errorf("backup completed with %d fatal error(s):\n  %s", len(fatalErrors), strings.Join(allErrors, "\n  "))
 	}
 
+	// 2. Partial Destination Warnings (all targets backed up to >=1 destination, but >=1 secondary destination failed)
+	if len(partialWarnings) > 0 {
+		sysinfo.SendDesktopAlert("Castor Backup Warning", fmt.Sprintf("Backup partially synced with %d destination warning(s).", len(partialWarnings)), false)
+
+		fmt.Printf("%s Synced %d target(s) (%s total ciphertext) with %d destination warning(s) in %s\n\n",
+			lipgloss.NewStyle().Foreground(tui.ColorWarning).Bold(true).Render("⚠ Partial Sync:"),
+			len(changedTargetNames),
+			tui.FormatBytes(totalTransferred),
+			len(partialWarnings),
+			time.Now().Format("15:04:05"),
+		)
+		for _, w := range partialWarnings {
+			fmt.Printf("   %s %s\n", lipgloss.NewStyle().Foreground(tui.ColorWarning).Render("•"), w)
+		}
+		fmt.Println()
+		fmt.Printf("Healthy destinations are safely synced and recorded in state. Run 'castor status' to inspect.\n")
+
+		runRecord := config.RunRecord{
+			StartedAt:      runStarted,
+			FinishedAt:     time.Now().UTC(),
+			Trigger:        trigger,
+			TargetsTotal:   len(targetsToProcess),
+			TargetsSynced:  len(changedTargetNames),
+			TargetsSkipped: len(targetsToProcess) - len(changedTargetNames),
+			TargetsFailed:  0,
+			BytesStreamed:  totalTransferred,
+			Errors:         partialWarnings,
+			Status:         "partial",
+		}
+		_ = config.AppendRun(historyPath, runRecord)
+
+		tui.MaybePrintTip(cfg.AreTipsEnabled())
+		return nil
+	}
+
+	// 3. 100% Clean Success
 	fmt.Printf("%s Synced %d changed target(s) (%s total ciphertext) in %s\n",
 		lipgloss.NewStyle().Foreground(tui.ColorSuccess).Bold(true).Render("✔ Done!"),
 		len(changedTargetNames),
@@ -432,12 +492,6 @@ func runPush(cmd *cobra.Command, args []string) error {
 
 	tui.MaybePrintTip(cfg.AreTipsEnabled())
 
-	// Record run in history
-	historyPath := config.HistoryPathForConfig(configPath)
-	trigger := "manual"
-	if os.Getenv("CASTOR_SCHEDULED") == "1" {
-		trigger = "scheduled"
-	}
 	runRecord := config.RunRecord{
 		StartedAt:      runStarted,
 		FinishedAt:     time.Now().UTC(),

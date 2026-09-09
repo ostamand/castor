@@ -97,6 +97,21 @@ func TestMultiDestinationWriterPartialFailureIsolation(t *testing.T) {
 	if !bytes.Equal(healthy.buf.Bytes(), payload) {
 		t.Errorf("healthy writer did not receive payload: %s", healthy.buf.String())
 	}
+
+	// Close must succeed because 'gcs' closed cleanly, even though 'gdrive' failed
+	if err := mw.Close(); err != nil {
+		t.Fatalf("expected Close to succeed with partial destination healthy, got: %v", err)
+	}
+
+	succeeded := mw.SucceededDestinations()
+	if len(succeeded) != 1 || succeeded[0] != "gcs" {
+		t.Errorf("expected succeeded [gcs], got: %v", succeeded)
+	}
+
+	failed := mw.FailedDestinations()
+	if len(failed) != 1 || failed["gdrive"] == nil {
+		t.Errorf("expected failed [gdrive], got: %v", failed)
+	}
 }
 
 func TestMultiDestinationWriterTotalFailure(t *testing.T) {
@@ -112,5 +127,10 @@ func TestMultiDestinationWriterTotalFailure(t *testing.T) {
 	_, err := mw.Write(payload)
 	if err == nil {
 		t.Fatalf("expected error when all destinations fail, got nil")
+	}
+
+	// Close must return an error because all destinations failed
+	if err := mw.Close(); err == nil {
+		t.Fatalf("expected error on Close when all destinations fail, got nil")
 	}
 }

@@ -185,6 +185,10 @@ func StreamArchive(
 	if closeAgeErr != nil {
 		return nil, fmt.Errorf("failed to finalize Age encryption: %w", closeAgeErr)
 	}
+	if closeMultiErr != nil {
+		// All destinations failed to write/close the archive payload
+		return nil, fmt.Errorf("all destinations failed payload streaming: %w", closeMultiErr)
+	}
 
 	cipherBytes := hasher.BytesWritten()
 	sha256Sum := hasher.SHA256()
@@ -203,15 +207,22 @@ func StreamArchive(
 	}
 
 	// 7. Write Sidecar Metadata Manifest (.meta.json.age)
+	// Only attempt writing metadata to destinations that successfully received the archive payload
+	destErrors := multiWriter.Errors()
 	var metaNamedWriters []storage.NamedWriter
 	for _, dest := range activeDests {
+		if destErrors[dest.Name] != nil {
+			continue
+		}
 		prov := providers[dest.Name]
 		mw, err := prov.NewWriter(ctx, metaRemotePath)
 		if err != nil {
-			return nil, fmt.Errorf("failed to open metadata writer for '%s': %w", dest.Name, err)
+			destErrors[dest.Name] = fmt.Errorf("failed to open metadata writer: %w", err)
+			continue
 		}
 		metaNamedWriters = append(metaNamedWriters, storage.NamedWriter{Name: dest.Name, Writer: mw})
 	}
+
 	if len(metaNamedWriters) > 0 {
 		metaMulti := storage.NewMultiDestinationWriter(metaNamedWriters)
 		scope := "user"
@@ -225,11 +236,33 @@ func StreamArchive(
 		)
 		if pushErr := PushMetadata(ctx, metaMulti, meta, cfg.Security.AgePublicKeys); pushErr != nil {
 			_ = metaMulti.Close()
-			return nil, fmt.Errorf("failed to write metadata manifest: %w", pushErr)
+			for _, nw := range metaNamedWriters {
+				if destErrors[nw.Name] == nil {
+					destErrors[nw.Name] = fmt.Errorf("failed to write metadata manifest: %w", pushErr)
+				}
+			}
+		} else {
+			_ = metaMulti.Close()
+			for k, v := range metaMulti.Errors() {
+				destErrors[k] = v
+			}
 		}
-		if closeMetaErr := metaMulti.Close(); closeMetaErr != nil {
-			return nil, fmt.Errorf("failed to flush metadata manifest: %w", closeMetaErr)
+	}
+
+	// Check if at least one destination succeeded both payload and manifest
+	var succeededDests []string
+	for _, dest := range activeDests {
+		if destErrors[dest.Name] == nil {
+			succeededDests = append(succeededDests, dest.Name)
 		}
+	}
+
+	if len(succeededDests) == 0 && len(activeDests) > 0 {
+		var errList []string
+		for d, e := range destErrors {
+			errList = append(errList, fmt.Sprintf("%s: %v", d, e))
+		}
+		return nil, fmt.Errorf("all destinations failed: %s", strings.Join(errList, "; "))
 	}
 
 	var streamedNames []string
@@ -247,7 +280,7 @@ func StreamArchive(
 		CipherBytes:       cipherBytes,
 		ArchiveSHA256:     sha256Sum,
 		Duration:          time.Since(start),
-		DestErrors:        multiWriter.Errors(),
+		DestErrors:        destErrors,
 		StreamedDests:     streamedNames,
-	}, closeMultiErr
+	}, nil
 }

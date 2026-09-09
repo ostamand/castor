@@ -77,7 +77,9 @@ func (m *MultiDestinationWriter) Write(p []byte) (int, error) {
 	return len(p), nil
 }
 
-// Close flushes and closes all underlying destination writers
+// Close flushes and closes all underlying destination writers.
+// It returns an error only if all destinations failed to write or close.
+// Individual destination errors are preserved in m.Errors().
 func (m *MultiDestinationWriter) Close() error {
 	var wg sync.WaitGroup
 	for _, nw := range m.writers {
@@ -95,12 +97,16 @@ func (m *MultiDestinationWriter) Close() error {
 	}
 	wg.Wait()
 
-	if len(m.errs) > 0 {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	// Only return error if every single destination failed
+	if len(m.errs) == len(m.writers) && len(m.writers) > 0 {
 		var errMsgs []string
 		for name, err := range m.errs {
 			errMsgs = append(errMsgs, fmt.Sprintf("%s: %v", name, err))
 		}
-		return fmt.Errorf("destination stream errors: %s", fmt.Sprintf("[%v]", errMsgs))
+		return fmt.Errorf("all destinations failed: %s", fmt.Sprintf("[%v]", errMsgs))
 	}
 
 	return nil
@@ -115,4 +121,22 @@ func (m *MultiDestinationWriter) Errors() map[string]error {
 		copyMap[k] = v
 	}
 	return copyMap
+}
+
+// SucceededDestinations returns the names of all destinations that had no errors
+func (m *MultiDestinationWriter) SucceededDestinations() []string {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	var succeeded []string
+	for _, nw := range m.writers {
+		if m.errs[nw.Name] == nil {
+			succeeded = append(succeeded, nw.Name)
+		}
+	}
+	return succeeded
+}
+
+// FailedDestinations returns a map of destination names to their respective stream errors
+func (m *MultiDestinationWriter) FailedDestinations() map[string]error {
+	return m.Errors()
 }
