@@ -7,6 +7,7 @@ import (
 	"path"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"github.com/charmbracelet/lipgloss"
 	"github.com/ostamand/castor/internal/config"
@@ -50,6 +51,11 @@ func runMv(cmd *cobra.Command, args []string) error {
 		mvNoCloud = false
 	}()
 
+	ctx := context.Background()
+	if cmd != nil && cmd.Context() != nil {
+		ctx = cmd.Context()
+	}
+
 	configPath := cfgPath
 	if configPath == "" {
 		configPath = config.DefaultConfigPath()
@@ -62,6 +68,10 @@ func runMv(cmd *cobra.Command, args []string) error {
 
 	oldIdentifier := strings.TrimSpace(args[0])
 	newIdentifier := strings.TrimSpace(args[1])
+	cleanNewName := config.NormalizeTargetName(newIdentifier)
+	if cleanNewName == "" {
+		return fmt.Errorf("new target name cannot be empty")
+	}
 
 	// 1. Locate target by name, path, or leaf-name
 	matchIdx := -1
@@ -86,15 +96,37 @@ func runMv(cmd *cobra.Command, args []string) error {
 		}
 	}
 
+	// If target not found under old identifier, check if it was already renamed to newIdentifier
 	if matchIdx < 0 {
+		alreadyIdx := -1
+		for i, t := range cfg.Targets {
+			if t.Name == cleanNewName || config.NormalizeTargetName(t.Name) == cleanNewName {
+				alreadyIdx = i
+				break
+			}
+		}
+		if alreadyIdx >= 0 {
+			oldCanonicalKey := config.CanonicalCloudKey(cfg.Namespace, oldIdentifier)
+			newCanonicalKey := config.CanonicalCloudKey(cfg.Namespace, cleanNewName)
+
+			fmt.Printf("Target '%s' is already registered in %s.\n", cleanNewName, configPath)
+			activeDests := cfg.ActiveDestinations()
+			if !mvNoCloud && len(activeDests) > 0 {
+				fmt.Printf("\nChecking for any unmigrated remote archives under '%s'...\n", oldCanonicalKey)
+				migratedCount := migrateAllDestinations(ctx, activeDests, oldCanonicalKey, newCanonicalKey)
+				if migratedCount > 0 {
+					fmt.Printf("\n✔ Migrated %d remaining cloud storage object(s) to '%s'.\n", migratedCount, newCanonicalKey)
+				} else {
+					fmt.Println("  No unmigrated cloud archives found.")
+				}
+			}
+			return nil
+		}
+
 		return fmt.Errorf("target '%s' not found in config\n\nRun 'castor status' to see registered targets.", oldIdentifier)
 	}
 
 	target := cfg.Targets[matchIdx]
-	cleanNewName := config.NormalizeTargetName(newIdentifier)
-	if cleanNewName == "" {
-		return fmt.Errorf("new target name cannot be empty")
-	}
 
 	if target.Name == cleanNewName {
 		fmt.Printf("Target '%s' is already named '%s'. Nothing to do.\n", target.Name, cleanNewName)
@@ -135,13 +167,21 @@ func runMv(cmd *cobra.Command, args []string) error {
 		}
 	}
 
-	// 3. Update target in config.toml
+	// 3. Migrate remote cloud archives on active destinations
+	activeDests := cfg.ActiveDestinations()
+	migratedCount := 0
+	if !mvNoCloud && len(activeDests) > 0 {
+		fmt.Println()
+		migratedCount = migrateAllDestinations(ctx, activeDests, oldCanonicalKey, newCanonicalKey)
+	}
+
+	// 4. Update target in config.toml
 	cfg.Targets[matchIdx].Name = cleanNewName
 	if err := config.SaveConfig(configPath, cfg); err != nil {
 		return fmt.Errorf("failed to save config file: %w", err)
 	}
 
-	// 4. Update sync state in state.json
+	// 5. Update sync state in state.json
 	statePath := config.StatePathForConfig(configPath)
 	state, _ := config.LoadState(statePath)
 	if state != nil && state.Targets != nil {
@@ -149,28 +189,6 @@ func runMv(cmd *cobra.Command, args []string) error {
 			state.Targets[newCanonicalKey] = tState
 			delete(state.Targets, oldCanonicalKey)
 			_ = config.SaveState(statePath, state)
-		}
-	}
-
-	// 5. Migrate remote cloud archives
-	migratedCount := 0
-	if !mvNoCloud && len(cfg.Destinations) > 0 {
-		ctx := context.Background()
-		for _, dest := range cfg.Destinations {
-			prov, err := storage.NewProviderFromConfig(ctx, dest)
-			if err != nil {
-				if verbose {
-					fmt.Printf("  ⚠ Could not connect to destination '%s': %v\n", dest.Name, err)
-				}
-				continue
-			}
-
-			migrated, err := migrateDestinationObjects(ctx, prov, oldCanonicalKey, newCanonicalKey)
-			_ = prov.Close()
-			if err != nil && verbose {
-				fmt.Printf("  ⚠ Failed to migrate objects in '%s': %v\n", dest.Name, err)
-			}
-			migratedCount += migrated
 		}
 	}
 
@@ -191,35 +209,92 @@ func runMv(cmd *cobra.Command, args []string) error {
 	return nil
 }
 
+func migrateAllDestinations(ctx context.Context, dests []config.DestinationConfig, oldCanonicalKey, newCanonicalKey string) int {
+	migratedCount := 0
+	for _, dest := range dests {
+		fmt.Printf("📦 Destination '%s' (%s):\n", dest.Name, dest.Provider)
+		prov, err := storage.NewProviderFromConfig(ctx, dest)
+		if err != nil {
+			fmt.Printf("   ⚠ Could not connect: %v\n", err)
+			continue
+		}
+
+		migrated, err := migrateDestinationObjects(ctx, prov, oldCanonicalKey, newCanonicalKey)
+		_ = prov.Close()
+		if err != nil {
+			fmt.Printf("   ⚠ Failed to migrate objects: %v\n", err)
+		}
+		migratedCount += migrated
+	}
+	return migratedCount
+}
+
 func migrateDestinationObjects(ctx context.Context, prov storage.Provider, oldCanonicalKey, newCanonicalKey string) (int, error) {
 	oldDir := path.Dir(oldCanonicalKey)
 	oldBase := path.Base(oldCanonicalKey)
 	newDir := path.Dir(newCanonicalKey)
 	newBase := path.Base(newCanonicalKey)
 
-	objects, err := prov.List(ctx, oldDir)
-	if err != nil {
-		return 0, err
+	// List using the targeted canonical key prefix
+	objects, err := prov.List(ctx, oldCanonicalKey)
+	if err != nil || len(objects) == 0 {
+		// Fallback to oldDir in case provider requires folder-level listing
+		dirObjects, dirErr := prov.List(ctx, oldDir)
+		if dirErr == nil && len(dirObjects) > 0 {
+			objects = dirObjects
+		} else if err != nil {
+			return 0, err
+		}
 	}
 
-	migrated := 0
+	var toMigrate []storage.ObjectInfo
 	for _, obj := range objects {
 		cleanObj := strings.TrimPrefix(obj.Name, "archives/")
 		objDir := path.Dir(cleanObj)
 		objBase := path.Base(cleanObj)
 
 		if objDir == oldDir && (objBase == oldBase || strings.HasPrefix(objBase, oldBase+".")) {
-			suffix := strings.TrimPrefix(objBase, oldBase)
-			newPath := path.Join(newDir, newBase+suffix)
-
-			if err := streamMoveObject(ctx, prov, obj.Name, newPath); err != nil {
-				return migrated, err
-			}
-			migrated++
+			toMigrate = append(toMigrate, obj)
 		}
 	}
 
+	if len(toMigrate) == 0 {
+		fmt.Printf("   • No existing archives found for '%s'\n", oldCanonicalKey)
+		return 0, nil
+	}
+
+	fmt.Printf("   • Found %d archive object(s)\n", len(toMigrate))
+	migrated := 0
+	for _, obj := range toMigrate {
+		cleanObj := strings.TrimPrefix(obj.Name, "archives/")
+		objBase := path.Base(cleanObj)
+		suffix := strings.TrimPrefix(objBase, oldBase)
+		newPath := path.Join(newDir, newBase+suffix)
+
+		start := time.Now()
+		_, isMover := prov.(storage.Mover)
+		modeDesc := "stream"
+		if isMover {
+			modeDesc = "instant"
+		}
+
+		fmt.Printf("   • Moving %s → %s (%s)...", objBase, path.Base(newPath), modeDesc)
+		if err := moveObject(ctx, prov, obj.Name, newPath); err != nil {
+			fmt.Printf(" ❌ failed: %v\n", err)
+			return migrated, err
+		}
+		fmt.Printf(" ✔ done (%s)\n", time.Since(start).Round(time.Millisecond))
+		migrated++
+	}
+
 	return migrated, nil
+}
+
+func moveObject(ctx context.Context, prov storage.Provider, oldName, newName string) error {
+	if mover, ok := prov.(storage.Mover); ok {
+		return mover.Move(ctx, oldName, newName)
+	}
+	return streamMoveObject(ctx, prov, oldName, newName)
 }
 
 func streamMoveObject(ctx context.Context, prov storage.Provider, oldName, newName string) error {

@@ -115,6 +115,22 @@ func (g *GCSProvider) Delete(ctx context.Context, objectName string) error {
 	return g.client.Bucket(g.bucketName).Object(objPath).Delete(ctx)
 }
 
+// Move renames an object server-side in GCS using CopierFrom and Delete
+func (g *GCSProvider) Move(ctx context.Context, oldName, newName string) error {
+	src := g.client.Bucket(g.bucketName).Object(g.fullPath(oldName))
+	dst := g.client.Bucket(g.bucketName).Object(g.fullPath(newName))
+
+	if _, err := dst.CopierFrom(src).Run(ctx); err != nil {
+		return fmt.Errorf("failed to copy GCS object from '%s' to '%s': %w", oldName, newName, err)
+	}
+
+	if err := src.Delete(ctx); err != nil {
+		return fmt.Errorf("failed to delete source GCS object '%s' after copy: %w", oldName, err)
+	}
+
+	return nil
+}
+
 // Close closes the GCS client
 func (g *GCSProvider) Close() error {
 	return g.client.Close()

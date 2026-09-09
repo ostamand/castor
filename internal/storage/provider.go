@@ -32,6 +32,13 @@ type Provider interface {
 	Close() error
 }
 
+// Mover is an optional interface for storage providers that support
+// server-side or filesystem-level fast moves/renames without downloading
+// and re-uploading bytes over the network.
+type Mover interface {
+	Move(ctx context.Context, oldName, newName string) error
+}
+
 // NewProviderFromConfig instantiates any supported storage provider from its configuration
 func NewProviderFromConfig(ctx context.Context, dest config.DestinationConfig) (Provider, error) {
 	switch dest.Provider {

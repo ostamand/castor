@@ -122,6 +122,23 @@ func (m *MemoryProvider) Delete(ctx context.Context, objectName string) error {
 	return nil
 }
 
+// Move renames an object in-memory
+func (m *MemoryProvider) Move(ctx context.Context, oldName, newName string) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	data, exists := m.objects[oldName]
+	if !exists {
+		return fmt.Errorf("object '%s' not found in memory provider '%s'", oldName, m.name)
+	}
+
+	m.objects[newName] = data
+	m.updated[newName] = m.updated[oldName]
+	delete(m.objects, oldName)
+	delete(m.updated, oldName)
+	return nil
+}
+
 func (m *MemoryProvider) Close() error {
 	return nil
 }

@@ -226,3 +226,60 @@ func TestMvTargetCollisionAndNotFound(t *testing.T) {
 		t.Errorf("dry-run modified config: got %s, want targetA", loaded.Targets[0].Name)
 	}
 }
+
+func TestMvAlreadyRenamedRecovery(t *testing.T) {
+	tmp := t.TempDir()
+	cfgPath = filepath.Join(tmp, "config.toml")
+	vaultDir := filepath.Join(tmp, "vault")
+	defer func() { cfgPath = "" }()
+
+	initCfg := config.DefaultConfig()
+	initCfg.Namespace = "test-box"
+	initCfg.Security.Encrypt = false
+	initCfg.Destinations = []config.DestinationConfig{
+		{
+			Name:     "local-vault",
+			Provider: "local",
+			Path:     vaultDir,
+		},
+	}
+	// Config already has the new target name (simulating an interrupted run)
+	initCfg.Targets = []config.TargetConfig{
+		{
+			Name: "ai-images/castor",
+			Path: filepath.Join(tmp, "castor"),
+			Type: "generic",
+		},
+	}
+	if err := config.SaveConfig(cfgPath, initCfg); err != nil {
+		t.Fatalf("failed saving test config: %v", err)
+	}
+
+	// Seed cloud objects with OLD name
+	ctx := context.Background()
+	prov, err := storage.NewLocalProvider("local-vault", vaultDir)
+	if err != nil {
+		t.Fatalf("failed initializing local provider: %v", err)
+	}
+	w1, _ := prov.NewWriter(ctx, "test-box/images/castor.tar.zst")
+	_, _ = w1.Write([]byte("archive"))
+	_ = w1.Close()
+	_ = prov.Close()
+
+	mvYes = true
+	mvDryRun = false
+	mvNoCloud = false
+
+	// Re-run mv with old-name new-name
+	if err := runMv(nil, []string{"images/castor", "ai-images/castor"}); err != nil {
+		t.Fatalf("expected recovery to succeed, got error: %v", err)
+	}
+
+	// Verify object moved to new name
+	provVerify, _ := storage.NewLocalProvider("local-vault", vaultDir)
+	defer provVerify.Close()
+	objects, _ := provVerify.List(ctx, "test-box/ai-images/castor")
+	if len(objects) != 1 {
+		t.Errorf("expected 1 migrated object under test-box/ai-images/castor, got %d", len(objects))
+	}
+}

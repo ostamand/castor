@@ -507,3 +507,44 @@ func (d *DropboxProvider) Delete(ctx context.Context, objectName string) error {
 
 	return nil
 }
+
+// Move renames or moves an object server-side in Dropbox
+func (d *DropboxProvider) Move(ctx context.Context, oldName, newName string) error {
+	fromPath := d.resolvePath(oldName)
+	toPath := d.resolvePath(newName)
+
+	type moveArgs struct {
+		FromPath   string `json:"from_path"`
+		ToPath     string `json:"to_path"`
+		Autorename bool   `json:"autorename"`
+	}
+	bodyJSON, _ := json.Marshal(moveArgs{
+		FromPath:   fromPath,
+		ToPath:     toPath,
+		Autorename: false,
+	})
+
+	req, err := http.NewRequestWithContext(
+		ctx,
+		http.MethodPost,
+		d.apiURL+"/files/move_v2",
+		bytes.NewReader(bodyJSON),
+	)
+	if err != nil {
+		return fmt.Errorf("failed to create move request: %w", err)
+	}
+	req.Header.Set("Content-Type", "application/json")
+
+	resp, err := d.client.Do(req)
+	if err != nil {
+		return fmt.Errorf("move request failed from '%s' to '%s': %w", oldName, newName, err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(resp.Body)
+		return fmt.Errorf("move returned HTTP %d: %s", resp.StatusCode, string(body))
+	}
+
+	return nil
+}

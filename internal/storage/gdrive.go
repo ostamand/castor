@@ -245,25 +245,148 @@ func (g *GDriveProvider) NewReader(ctx context.Context, objectName string) (io.R
 	return resp.Body, nil
 }
 
-// List returns objects inside the Castor root hierarchy matching prefix
-func (g *GDriveProvider) List(ctx context.Context, prefix string) ([]ObjectInfo, error) {
+// findFolderID looks for a subfolder with the given name inside parentID without creating it
+func (g *GDriveProvider) findFolderID(ctx context.Context, parentID, name string) (string, error) {
+	stepKey := parentID + ":" + name
+	g.cacheMu.RLock()
+	if cachedID, ok := g.folderCache[stepKey]; ok {
+		g.cacheMu.RUnlock()
+		return cachedID, nil
+	}
+	g.cacheMu.RUnlock()
+
+	q := fmt.Sprintf("'%s' in parents and name = '%s' and mimeType = 'application/vnd.google-apps.folder' and trashed = false", parentID, name)
+	res, err := g.service.Files.List().Q(q).Fields("files(id)").Context(ctx).Do()
+	if err != nil {
+		return "", err
+	}
+	if len(res.Files) == 0 {
+		return "", nil
+	}
+	folderID := res.Files[0].Id
+	g.cacheMu.Lock()
+	g.folderCache[stepKey] = folderID
+	g.cacheMu.Unlock()
+	return folderID, nil
+}
+
+// listDirectFiles returns non-folder files directly inside parentID matching namePrefix
+func (g *GDriveProvider) listDirectFiles(ctx context.Context, parentID, currentRelPath, namePrefix string) ([]ObjectInfo, error) {
+	q := fmt.Sprintf("'%s' in parents and mimeType != 'application/vnd.google-apps.folder' and trashed = false", parentID)
 	var results []ObjectInfo
-	if err := g.walkFolder(ctx, g.rootFolderID, "", &results); err != nil {
-		return nil, err
+	pageToken := ""
+
+	for {
+		call := g.service.Files.List().
+			Q(q).
+			Fields("nextPageToken, files(id, name, size, modifiedTime)").
+			Context(ctx)
+		if pageToken != "" {
+			call = call.PageToken(pageToken)
+		}
+
+		res, err := call.Do()
+		if err != nil {
+			return nil, err
+		}
+
+		for _, f := range res.Files {
+			if namePrefix == "" || strings.HasPrefix(f.Name, namePrefix) {
+				modTime, _ := time.Parse(time.RFC3339, f.ModifiedTime)
+				results = append(results, ObjectInfo{
+					Name:         path.Join(currentRelPath, f.Name),
+					Size:         f.Size,
+					Updated:      modTime,
+					StorageClass: "STANDARD",
+				})
+			}
+		}
+
+		pageToken = res.NextPageToken
+		if pageToken == "" {
+			break
+		}
 	}
 
+	return results, nil
+}
+
+// List returns objects inside the Castor root hierarchy matching prefix
+func (g *GDriveProvider) List(ctx context.Context, prefix string) ([]ObjectInfo, error) {
 	cleanPrefix := strings.Trim(prefix, "/")
 	if cleanPrefix == "" {
+		var results []ObjectInfo
+		if err := g.walkFolder(ctx, g.rootFolderID, "", &results); err != nil {
+			return nil, err
+		}
 		return results, nil
 	}
 
-	var filtered []ObjectInfo
-	for _, obj := range results {
-		if strings.HasPrefix(obj.Name, cleanPrefix) {
-			filtered = append(filtered, obj)
+	parts := strings.Split(cleanPrefix, "/")
+	currentParent := g.rootFolderID
+	currentRelPath := ""
+
+	for i, part := range parts {
+		if part == "" || part == "." {
+			continue
 		}
+		folderID, err := g.findFolderID(ctx, currentParent, part)
+		if err != nil {
+			return nil, err
+		}
+		if folderID != "" {
+			currentParent = folderID
+			currentRelPath = path.Join(currentRelPath, part)
+			continue
+		}
+
+		// 'part' is not a folder. If this is not the last component, nothing can match.
+		if i < len(parts)-1 {
+			return nil, nil
+		}
+
+		// This is the last component and it is not a folder: search files directly in currentParent
+		return g.listDirectFiles(ctx, currentParent, currentRelPath, part)
 	}
-	return filtered, nil
+
+	// Entire cleanPrefix is a folder! Walk ONLY this folder subtree.
+	var results []ObjectInfo
+	if err := g.walkFolder(ctx, currentParent, currentRelPath, &results); err != nil {
+		return nil, err
+	}
+	return results, nil
+}
+
+// Move renames an object and/or moves it to a new parent folder on Google Drive
+func (g *GDriveProvider) Move(ctx context.Context, oldName, newName string) error {
+	oldParentID, oldFileName, err := g.resolveTargetFolder(ctx, oldName)
+	if err != nil {
+		return fmt.Errorf("failed to resolve source folder for '%s': %w", oldName, err)
+	}
+
+	fileID, err := g.findFileID(ctx, oldParentID, oldFileName)
+	if err != nil {
+		return fmt.Errorf("failed to find source file '%s': %w", oldName, err)
+	}
+	if fileID == "" {
+		return fmt.Errorf("file '%s' not found on Google Drive", oldName)
+	}
+
+	newParentID, newFileName, err := g.resolveTargetFolder(ctx, newName)
+	if err != nil {
+		return fmt.Errorf("failed to resolve destination folder for '%s': %w", newName, err)
+	}
+
+	updateCall := g.service.Files.Update(fileID, &drive.File{Name: newFileName})
+	if newParentID != oldParentID {
+		updateCall = updateCall.AddParents(newParentID).RemoveParents(oldParentID)
+	}
+
+	_, err = updateCall.Context(ctx).Do()
+	if err != nil {
+		return fmt.Errorf("failed to move file from '%s' to '%s' on Google Drive: %w", oldName, newName, err)
+	}
+	return nil
 }
 
 // walkFolder recursively gathers file metadata under parentID
